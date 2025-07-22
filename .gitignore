@@ -1,0 +1,14 @@
+### IDEA ###
+.idea/*
+*.iml
+**/target/*
+*/*.iml
+/.gradle/
+*/rebel.xml
+/jeecg-boot-module-system/src/main/resources/jeecglic.properties
+/jeecg-boot-module-admin/src/main/resources/jeecglic.properties
+/jeecg-boot-base/jeecg-boot-base-tools/target/
+logs/*
+/jeecg-boot-module-system/jrebel-classpath-15664.jar
+/jeecg-boot-module-admin/logs/
+/jeecg-boot-module-system/logs/
