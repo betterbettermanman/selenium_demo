@@ -55,6 +55,7 @@ def parse_courseid_by_regex(url):
 
 
 def open_home(driver):
+    print("打开首页，检测视频学习情况")
     global current_course_id
     url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
     driver.get(url)
@@ -67,9 +68,11 @@ def open_home(driver):
         print("找到class为'ivu-page-next'的div元素")
         list_div.click()
         is_next_page = judge_is_next_page(driver)
+    # 检测完成，关闭当前页面
 
 
 def check_study_time():
+    print("判断当前学习任务是否大于50学时")
     url = "https://api.scgb.gov.cn/api/services/app/class/app/getStudyProcess"
     response = requests.get(url=url, headers=headers)
     response_json = response.json()
@@ -80,40 +83,98 @@ def check_study_time():
         return True
 
 
+# 全局变量存储当前课程ID和主页面句柄
+current_course_id = None
+main_window_handle = None  # 用于存储主页面的句柄
+
+
+def parse_courseid_by_regex(url):
+    """从URL中解析courseId（复用之前的解析函数）"""
+    pattern = r'courseId=([^&#]+)'
+    match = re.search(pattern, url)
+    if match:
+        return match.group(1)
+    return None
+
+
 def judge_is_next_page(driver):
-    global current_course_id
-    # 等待class为"list"的div元素加载完成
-    list_div = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CLASS_NAME, "list"))
-    )
-    # print("找到class为'list'的div元素")
+    global current_course_id, main_window_handle
 
-    # 获取该div下的所有a标签
-    a_tags = list_div.find_elements(By.TAG_NAME, "a")
-    print(f"共找到{len(a_tags)}个a标签元素")
+    # 首次运行时记录主页面句柄
+    if not main_window_handle:
+        main_window_handle = driver.current_window_handle
+        # print(f"已记录主页面句柄: {main_window_handle}")
 
-    # 遍历每个a标签，检查是否包含class为"status success"的div
-    for index, a_tag in enumerate(a_tags, 1):
-        try:
-            # 可选：获取该a标签的其他信息（如链接、文本）
-            a_href = a_tag.get_attribute("href")
-            a_text = a_tag.text.strip()
-            print(f"文本: {a_text}")
-            # 检查当前a标签内是否存在class为"status success"的div
-            # 使用相对路径查找（.//表示在当前元素内部查找）
-            a_tag.find_element(By.XPATH, ".//div[@class='status success']")
-            # print(f"第{index}个a标签：包含class为'status success'的div")
+    try:
+        # 等待class为"list"的div元素加载完成
+        list_div = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "list"))
+        )
 
-        except NoSuchElementException:
-            print(f"检测到视频未播放完成,开始播放视频")
-            a_tag.click()
-            # print("开始播放视频")
-            current_course_id = parse_courseid_by_regex(a_href)
-            return False
-        except Exception as e:
-            print(f"处理第{index}个a标签时出错: {str(e)}")
-    print("未找到需要播放的视频，点击下一页")
-    return True
+        # 获取该div下的所有a标签
+        a_tags = list_div.find_elements(By.TAG_NAME, "a")
+        print(f"共找到{len(a_tags)}个a标签元素")
+
+        # 遍历每个a标签，检查是否包含class为"status success"的div
+        for index, a_tag in enumerate(a_tags, 1):
+            try:
+                # 获取a标签的链接和文本
+                a_href = a_tag.get_attribute("href")
+                # a_text = a_tag.text.strip()
+                # print(f"文本: {a_text}")
+
+
+                # 检查当前a标签内是否存在class为"status success"的div
+                a_tag.find_element(By.XPATH, ".//div[@class='status success']")
+                print(f"第{index}个a标签：视频播放完成")
+
+            except NoSuchElementException:
+                print(f"第{index}个a标签:视频未播放完成，在新的标签页开始播放视频")
+
+                # 记录当前所有标签页句柄（点击前）
+                handles_before_click = driver.window_handles
+
+                # 点击a标签打开新页面
+                a_tag.click()
+
+                # 等待新标签页打开
+                WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(len(handles_before_click) + 1))
+
+                # 获取所有标签页句柄（点击后）
+                all_handles = driver.window_handles
+
+                # 找到新打开的标签页句柄
+                new_handle = [h for h in all_handles if h not in handles_before_click][0]
+
+                # 关闭之前的标签页（除了主页面和新打开的页面）
+                for handle in all_handles:
+                    if handle != new_handle:
+                        driver.switch_to.window(handle)
+                        driver.close()
+                        # print(f"已关闭标签页: {handle}")
+
+                # 切换到新打开的标签页
+                driver.switch_to.window(new_handle)
+                # print(f"已切换到新标签页: {new_handle}")
+
+                # 解析课程ID
+                current_course_id = parse_courseid_by_regex(a_href)
+                print(f"当前课程ID: {current_course_id}")
+
+                return False  # 找到未播放视频，返回False停止翻页
+
+            except Exception as e:
+                print(f"处理第{index}个a标签时出错: {str(e)}")
+
+        print("未找到需要播放的视频，点击下一页")
+        return True  # 所有视频已完成，返回True继续翻页
+
+    except TimeoutException:
+        print("未找到class为'list'的div元素，可能已到最后一页")
+        return False
+    except Exception as e:
+        print(f"判断下一页时发生错误: {str(e)}")
+        return False
 
 
 def check_course_success():
@@ -122,7 +183,7 @@ def check_course_success():
     sleep_time = 10
     while True:
         check_play_success_url = "https://api.scgb.gov.cn/api/services/app/course/app/getCourseDetailByUserId?"
-        print("课程id:", current_course_id)
+        print("检测课程id:", current_course_id)
         if current_course_id != "":
             payload = {
                 "courseId": current_course_id
@@ -147,6 +208,8 @@ def check_course_success():
             else:
                 print("totalPeriod:", detail_json["totalPeriod"], "watchTimes:", detail_json["watchTimes"])
                 sleep_time = int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"])
+        else:
+            sleep_time = 10
         print(f"间隔{sleep_time}秒，继续检测")
         if sleep_time > 0:
             time.sleep(sleep_time)
@@ -154,12 +217,12 @@ def check_course_success():
 
 def init_browser():
     # 创建保存用户数据的目录
-    user_data_dir = os.path.join(os.getcwd(), "chrome_user_data2222")
+    user_data_dir = os.path.join(os.getcwd(), "周婷")
     os.makedirs(user_data_dir, exist_ok=True)
 
     # 设置 Chrome 浏览器选项
     chrome_options = Options()
-    # chrome_options.add_argument("--headless")  # 无头模式，不显示浏览器窗口
+    chrome_options.add_argument("--headless")  # 无头模式，不显示浏览器窗口
     chrome_options.add_argument(f"--user-data-dir={user_data_dir}")  # 保存用户数据
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
@@ -174,9 +237,9 @@ def init_browser():
 
 
 def is_login(driver):
-    driver.get("https://web.scgb.gov.cn/#/index")
-    time.sleep(2)
     while True:
+        driver.get("https://web.scgb.gov.cn/#/index")
+        time.sleep(2)
         # 等待class为"list"的div元素加载完成
         try:
             WebDriverWait(driver, 5).until(
@@ -189,9 +252,9 @@ def is_login(driver):
 
 if __name__ == '__main__':
     driver = init_browser()
-    # 判断用户是否登录 todo
-    is_login(driver)
-    # driver.get("https://web.scgb.gov.cn/#/personal")
+    # 判断用户是否登录
+    # is_login(driver)
+    driver.get("https://web.scgb.gov.cn/#/personal")
     # 获取浏览器参数
     store = json.loads(get_local_storage_value(driver, "store"))
     headers['Authorization'] = "Bearer " + store['session']['accessToken']
