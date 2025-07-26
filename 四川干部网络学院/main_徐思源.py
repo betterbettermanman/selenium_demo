@@ -2,12 +2,12 @@ import threading
 import time
 
 from 四川干部网络学院.main import init_browser, is_login, open_home, check_course_success, is_running
-username = "18783363361"
+username = "13679644177"
 
-password = "ZTzt1219089650@"
+password = "Abcd1234@"
 
 if __name__ == '__main__':
-    driver = init_browser(user_data_dir="周婷", is_headless=True)
+    driver = init_browser(user_data_dir="徐思源", is_headless=True)
     # 判断用户是否登录
     store = is_login(driver,username,password)
 

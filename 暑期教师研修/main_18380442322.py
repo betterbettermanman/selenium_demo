@@ -19,7 +19,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',  # 日志格式
     datefmt='%Y-%m-%d %H:%M:%S',  # 时间格式
     handlers=[
-        logging.FileHandler('teacher_training.log', encoding='utf-8'),  # 写入文件
+        # logging.FileHandler('teacher_training.log', encoding='utf-8'),  # 写入文件
         logging.StreamHandler()  # 输出到控制台
     ]
 )
