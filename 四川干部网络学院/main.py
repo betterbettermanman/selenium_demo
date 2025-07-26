@@ -39,6 +39,7 @@ def setup_info_only_logger():
     logger.add(
         sys.stdout,
         level="INFO",
+        # format="{time:YYYY-MM-DD HH:mm:ss} - Thread:{extra[thread_id]} - {level} - {message}",
     )
 
     # 可选：添加文件输出，同样限制级别为INFO
@@ -73,12 +74,20 @@ def parse_courseid_by_regex(url):
     return None
 
 
+video_url = [
+    "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB",
+    "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
+]
+current_video_url_index = 0
+
+
 def open_home(driver):
-    logger.info("打开首页，检测视频学习情况")
+    global current_video_url_index
     global current_course_id
-    url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
+    logger.info(f"打开首页，检测视频学习情况，current_video_url_index：{current_video_url_index}")
+    url = video_url[current_video_url_index]
     driver.get(url)
-    time.sleep(2)
+    time.sleep(5)
     is_next_page = judge_is_next_page(driver)
     while is_next_page:
         try:
@@ -89,6 +98,11 @@ def open_home(driver):
             list_div.click()
             time.sleep(2)
             is_next_page = judge_is_next_page(driver)
+        except NoSuchElementException:
+            logger.error("未找到下一页元素，当前视频观看完成")
+            current_video_url_index = current_video_url_index + 1
+            threading.Thread(target=open_home, args=(driver,), daemon=True).start()
+            break
         except Exception as e:
             logger.error(f"翻页操作失败: {str(e)}")
             break
@@ -101,7 +115,7 @@ def check_study_time():
     try:
         response = requests.get(url=url, headers=headers)
         response_json = response.json()
-        logger.debug(f"当前已学习时长: {response_json['result']['timesSum']}")
+        logger.info(f"当前已学习时长: {response_json['result']['timesSum']}")
         if int(response_json['result']['timesSum']) > 50:
             return False
         else:
@@ -229,7 +243,9 @@ def check_course_success(driver):
                         break
                 else:
                     logger.info(f"totalPeriod: {detail_json['totalPeriod']}, watchTimes: {detail_json['watchTimes']}")
-                    sleep_time = int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"])
+                    sleep_time = (int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"])) - 60
+                    if sleep_time < 10:
+                        sleep_time = 10
             except TimeoutException:
                 logger.error("链接超时")
                 continue
