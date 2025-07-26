@@ -1,7 +1,6 @@
-import threading
 import time
 
-from 四川干部网络学院.main import init_browser, is_login, open_home, check_course_success, is_running, exec_main
+from 四川干部网络学院.main import is_running, exec_main
 
 name = "周婷"
 username = "18783363361"

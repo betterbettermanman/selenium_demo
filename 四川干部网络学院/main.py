@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -106,7 +107,7 @@ def open_home(driver):
         except Exception as e:
             logger.error(f"翻页操作失败: {str(e)}")
             break
-    logger.info("检测完成，关闭当前页面")
+    # logger.info("检测完成，关闭当前页面")
 
 
 def check_study_time():
@@ -216,7 +217,7 @@ def judge_is_next_page(driver):
         return False
 
 
-def check_course_success(driver):
+def check_course_success(driver, username, password):
     global current_course_id
     global is_running
     sleep_time = 10
@@ -251,6 +252,8 @@ def check_course_success(driver):
                 continue
             except Exception as e:
                 logger.error(f"检测课程状态失败: {str(e)}")
+                # 登陆失效，进行重新登录
+                is_login(driver, username, password)
                 sleep_time = 10
         else:
             sleep_time = 10
@@ -302,11 +305,60 @@ def is_login(driver, username=None, password=None):
         else:
             logger.warning("未登录，请登录")
         auto_login(driver, username, password)
-        time.sleep(30)
+        time.sleep(5)
+
+
+def download_current_img(driver, img_xpath, save_path="current_image.png"):
+    """
+    下载页面中当前显示的img图片（应对src动态生成的情况）
+
+    :param driver: Selenium WebDriver实例
+    :param img_xpath: 目标img标签的XPath
+    :param save_path: 图片保存路径
+    :return: 下载成功返回True，失败返回False
+    """
+    try:
+        # 等待图片元素加载完成
+        img_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, img_xpath))
+        )
+
+        # 通过JavaScript获取图片的Base64编码（当前页面显示的图片）
+        # 原理：创建canvas，将图片绘制到canvas，再导出为Base64
+        script = """
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            var img = arguments[0];
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            return canvas.toDataURL('image/png');
+        """
+        base64_data = driver.execute_script(script, img_element)
+
+        # 处理Base64数据（去除前缀）
+        if base64_data.startswith('data:image/png;base64,'):
+            base64_data = base64_data.split(',')[1]
+        else:
+            print("获取的图片Base64格式不支持")
+            return False
+
+        # 解码并保存图片
+        img_data = base64.b64decode(base64_data)
+        with open(save_path, 'wb') as f:
+            f.write(img_data)
+
+        print(f"图片已保存至: {os.path.abspath(save_path)}")
+        return True
+
+    except Exception as e:
+        print(f"下载图片失败: {str(e)}")
+        return False
 
 
 def auto_login(driver, username, password):
     try:
+        logger.info("开始自动登录")
         # 输入用户名
         username_input = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="请输入您的用户名"]'))
@@ -323,13 +375,17 @@ def auto_login(driver, username, password):
         password_input.send_keys(password)
 
         # # 处理验证码
-        # capture_input = WebDriverWait(driver, 10).until(
-        #     EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="请输入验证码"]'))
-        # )
-        # capture_input.clear()
-        # captcha = get_formdata_img_src(driver)
-        # capture_input.send_keys(captcha)
-
+        capture_input = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="请输入验证码"]'))
+        )
+        capture_input.clear()
+        captcha = get_formdata_img_src(driver)
+        capture_input.send_keys(captcha)
+        # 点击登录按钮
+        login_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//div[@class="ivu-form-item-content"]//button'))
+        )
+        login_button.click()
     except TimeoutException:
         logger.error("超时未找到登录相关输入框")
     except ElementNotInteractableException:
@@ -346,20 +402,15 @@ def get_formdata_img_src(driver, wait_time=10):
             EC.presence_of_element_located((By.CLASS_NAME, "validate-form-img"))
         )
         logger.info("找到验证码图片容器")
+        save_path = "captcha_screenshot.png"  # 保存路径可自定义
+        success = formdata_div.screenshot(save_path)
 
-        # 查找img标签
-        img_tags = formdata_div.find_elements(By.TAG_NAME, "img")
-        logger.info(f"找到{len(img_tags)}个验证码图片标签")
-
-        if img_tags:
-            src = img_tags[0].get_attribute("src")
-            if src:
-                logger.info(f"验证码图片URL: {src}")
-                return recognize_verify_code(image_url=src)
-            else:
-                logger.warning("验证码图片没有src属性")
+        if success:
+            print(f"图片元素截图已保存至: {os.path.abspath(save_path)}")
+            return recognize_verify_code(image_path=os.path.abspath(save_path))
         else:
-            logger.warning("未找到验证码图片标签")
+            print("截图保存失败，可能元素不可见或尺寸为0")
+            return ""
     except TimeoutException:
         logger.error("超时未找到验证码图片容器")
     except NoSuchElementException:
@@ -396,10 +447,10 @@ def recognize_verify_code(image_path=None, image_url=None):
 
 
 def exec_main(name, username, password):
-    driver = init_browser(user_data_dir=name, is_headless=False)
+    driver = init_browser(user_data_dir=name, is_headless=True)
     # 判断用户是否登录
     is_login(driver, username, password)
     driver.close()
     driver = init_browser(user_data_dir=name, is_headless=True)
     open_home(driver)
-    threading.Thread(target=check_course_success, args=(driver,), daemon=True).start()
+    threading.Thread(target=check_course_success, args=(driver, username, password,), daemon=True).start()

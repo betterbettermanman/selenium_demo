@@ -411,7 +411,7 @@ class TeacherTrainingAutomator:
 
     def _check_play_status(self):
         global course_status
-        sleep_num = 10
+        sleep_num = 60
         while self.running:
             try:
                 time.sleep(sleep_num)
@@ -567,7 +567,7 @@ target_courses = [
     },
 ]
 
-user_data_dir = "18380442322"
+user_data_dir = "18080395300"
 
 if __name__ == "__main__":
     check_login()

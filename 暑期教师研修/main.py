@@ -567,8 +567,8 @@ target_courses = [
     },
 ]
 
-user_data_dir = "13550500561"
-password = "Gxm147258"
+user_data_dir = "18382174077"
+password = "Zhying0521"
 
 if __name__ == "__main__":
     check_login()
