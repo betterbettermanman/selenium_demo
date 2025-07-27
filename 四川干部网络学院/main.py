@@ -75,39 +75,52 @@ def parse_courseid_by_regex(url):
     return None
 
 
-video_url = [
-    "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB",
-    "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
-]
-current_video_url_index = 0
+video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观", "习近平强军思想"]
+current_video_url_index = 2
 
 
 def open_home(driver):
     global current_video_url_index
     global current_course_id
     logger.info(f"打开首页，检测视频学习情况，current_video_url_index：{current_video_url_index}")
-    url = video_url[current_video_url_index]
+    url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
     driver.get(url)
+    # 切换左侧标签
+    # 等待10秒，检查是否存在同时有两个类名的元素
+    title = WebDriverWait(driver, 5).until(
+        EC.presence_of_element_located((By.XPATH, "//div[@title='" + video_name[current_video_url_index] + "']"))
+    )
+    title.click()
     time.sleep(5)
     is_next_page = judge_is_next_page(driver)
     while is_next_page:
+        # 当存在class：ivu-page-next ivu-page-disabled说明没有下一页了
+        # 首先检查是否存在同时包含两个类名的元素
         try:
-            list_div = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
+            # 等待10秒，检查是否存在同时有两个类名的元素
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".ivu-page-next.ivu-page-disabled"))
             )
-            logger.info("找到class为'ivu-page-next'的div元素")
-            list_div.click()
-            time.sleep(2)
-            is_next_page = judge_is_next_page(driver)
-        except NoSuchElementException:
-            logger.error("未找到下一页元素，当前视频观看完成")
+            logger.info("存在 class 为 'ivu-page-next ivu-page-disabled' 的元素")
             current_video_url_index = current_video_url_index + 1
             threading.Thread(target=open_home, args=(driver,), daemon=True).start()
             break
+        except TimeoutException:
+            # 如果不存在，检查是否只存在"ivu-page-next"类的元素
+            try:
+                element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
+                )
+                logger.info("存在 class 为 'ivu-page-next' 的元素")
+                element.click()
+                time.sleep(2)
+                is_next_page = judge_is_next_page(driver)
+            except TimeoutException:
+                print("两个类名的元素都不存在")
+
         except Exception as e:
             logger.error(f"翻页操作失败: {str(e)}")
             break
-    # logger.info("检测完成，关闭当前页面")
 
 
 def check_study_time():
@@ -276,7 +289,7 @@ def init_browser(user_data_dir, is_headless=False):
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     # 指定 ChromeDriver 的路径
-    chromedriver_path = "D:\\develop\\workspace\\mine\\selenium_demo\\driver\\138\\chromedriver.exe"
+    chromedriver_path = "chromedriver.exe"
 
     # 使用 Service 类来指定驱动路径
     service = Service(chromedriver_path)
@@ -386,6 +399,7 @@ def auto_login(driver, username, password):
             EC.element_to_be_clickable((By.XPATH, '//div[@class="ivu-form-item-content"]//button'))
         )
         login_button.click()
+        # 判断是的为第一次登录，修改登录密码
     except TimeoutException:
         logger.error("超时未找到登录相关输入框")
     except ElementNotInteractableException:
@@ -446,11 +460,50 @@ def recognize_verify_code(image_path=None, image_url=None):
         return None
 
 
-def exec_main(name, username, password):
-    driver = init_browser(user_data_dir=name, is_headless=True)
+def exec_main(name, username, password,is_head=True):
+    driver = init_browser(user_data_dir=name, is_headless=is_head)
     # 判断用户是否登录
     is_login(driver, username, password)
     driver.close()
-    driver = init_browser(user_data_dir=name, is_headless=True)
+    driver = init_browser(user_data_dir=name, is_headless=is_head)
     open_home(driver)
     threading.Thread(target=check_course_success, args=(driver, username, password,), daemon=True).start()
+
+
+import configparser
+
+
+def read_config():
+    # 创建配置解析器对象
+    config = configparser.ConfigParser()
+
+    # 获取配置文件路径（兼容开发环境和打包后的环境）
+    if getattr(sys, 'frozen', False):
+        # 打包后的环境
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        # 开发环境
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    config_path = os.path.join(base_dir, 'config.ini')
+
+    # 检查配置文件是否存在
+    if not os.path.exists(config_path):
+        print(f"错误：配置文件 {config_path} 不存在！")
+        return
+        # 读取配置文件
+    config.read(config_path, encoding='utf-8')
+    return config
+
+
+if __name__ == '__main__':
+    # 读取配置文件
+    config = read_config()
+    name = config['DEFAULT']['name']
+    username = config['DEFAULT']['username']
+    password = config['DEFAULT']['password']
+    isHead = bool(config['DEFAULT']['isHead'])
+    exec_main(name, username, password,is_head=isHead)
+    while is_running:
+        time.sleep(1)
+    print("视频已全部播放完成")
