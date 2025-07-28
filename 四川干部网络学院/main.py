@@ -76,7 +76,54 @@ def parse_courseid_by_regex(url):
 
 
 video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观", "习近平强军思想"]
-current_video_url_index = 2
+current_video_url_index = 0
+
+
+def open_home2(driver):
+    # 打开个人中心，检测未结业班级列表
+    driver.get("https://web.scgb.gov.cn/#/personal")
+    time.sleep(10)
+
+    try:
+        # 等待包含class为num-info的div元素加载完成
+        num_info_div = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "num-info"))
+        )
+
+        # 获取该div下所有的span元素
+        span_elements = num_info_div.find_elements(By.TAG_NAME, "span")
+
+        # 提取所有span元素的文本值
+        span_values = [span.text for span in span_elements if span.text.strip()]
+
+        # 打印结果
+        print("num-info下的所有span值：")
+        for value in span_values:
+            print(value)
+        # 课程观看，分必修和选修
+        # 必修
+        driver.get("https://web.scgb.gov.cn/#/myClass?id=019815fe-ec44-753d-9b1d-554f017df106&collected=1")
+        time.sleep(10)
+        # 等待包含class为num-info的div元素加载完成
+
+        required_div = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((
+                By.XPATH,
+                "//div[@class='item' and text()=' 必修 ']"
+            ))
+        )
+        required_div.click()
+
+        required_div = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((
+                By.CLASS_NAME,
+                "course-list"
+            ))
+        )
+
+    finally:
+        logger.info(" 关闭浏览器")
+        # driver.quit()
 
 
 def open_home(driver):
@@ -234,6 +281,7 @@ def check_course_success(driver, username, password):
     global current_course_id
     global is_running
     sleep_time = 10
+    call_login = False
     while True:
         check_play_success_url = "https://api.scgb.gov.cn/api/services/app/course/app/getCourseDetailByUserId?"
         logger.info(f"检测课程id: {current_course_id}")
@@ -256,10 +304,17 @@ def check_course_success(driver, username, password):
                         is_running = False
                         break
                 else:
-                    logger.info(f"totalPeriod: {detail_json['totalPeriod']}, watchTimes: {detail_json['watchTimes']}")
-                    sleep_time = (int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"])) - 60
-                    if sleep_time < 10:
-                        sleep_time = 10
+                    if not call_login:
+                        logger.info(
+                            f"totalPeriod: {detail_json['totalPeriod']}, watchTimes: {detail_json['watchTimes']}")
+                        sleep_time = (int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"])) - 60
+                        if sleep_time < 10:
+                            sleep_time = 10
+                    else:
+                        print("重新登录，重新打开页面")
+                        threading.Thread(target=open_home, args=(driver,), daemon=True).start()
+                        current_course_id = ""
+                        call_login = False
             except TimeoutException:
                 logger.error("链接超时")
                 continue
@@ -267,7 +322,8 @@ def check_course_success(driver, username, password):
                 logger.error(f"检测课程状态失败: {str(e)}")
                 # 登陆失效，进行重新登录
                 is_login(driver, username, password)
-                sleep_time = 10
+                call_login = True
+                sleep_time = 20
         else:
             sleep_time = 10
         logger.info(f"间隔{sleep_time}秒，继续检测")
@@ -460,7 +516,7 @@ def recognize_verify_code(image_path=None, image_url=None):
         return None
 
 
-def exec_main(name, username, password,is_head=True):
+def exec_main(name, username, password, is_head=True):
     driver = init_browser(user_data_dir=name, is_headless=is_head)
     # 判断用户是否登录
     is_login(driver, username, password)
@@ -503,7 +559,9 @@ if __name__ == '__main__':
     username = config['DEFAULT']['username']
     password = config['DEFAULT']['password']
     isHead = bool(config['DEFAULT']['isHead'])
-    exec_main(name, username, password,is_head=isHead)
+    if 'startIndex' in config['DEFAULT']:
+        current_video_url_index = int(config['DEFAULT']['startIndex'])
+    exec_main(name, username, password, is_head=isHead)
     while is_running:
         time.sleep(1)
     print("视频已全部播放完成")
