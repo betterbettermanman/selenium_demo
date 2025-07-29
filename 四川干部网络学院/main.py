@@ -1,10 +1,12 @@
 import base64
+import configparser
 import json
 import os
 import re
 import sys
 import threading
 import time
+from urllib.parse import urlparse, parse_qs
 
 import ddddocr
 import requests
@@ -17,7 +19,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
+# 初始化ocr识别器
+ocr = ddddocr.DdddOcr()
 current_course_id = ""
+is_must = False
 is_running = True
 headers = {
     'Sec-Fetch-User': '?1',
@@ -29,6 +34,10 @@ headers = {
     'Connection': 'keep-alive',
     "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJPcmdhbklkIjoiMDE5ODMxMDAtZGI1Ni03MWNjLWI2NGQtNmY4NGQwYWM3MGQwIiwiQ2xpZW50VHlwZSI6IiIsIk9yZ2FuTmFtZSI6IuWvjOeJm-Wwj-WtpiIsIkFzc2Vzc1R5cGUiOjAsIlVzZXJJZCI6IjAxOTgzYzdmLTMxZWItN2I0NC1hNzRmLWZhZTRiYjliNmI3YiIsIk9yZ2FuUGF0aCI6IjJjNTUxYTczLTViNDEtMTFlZC05NTFhLTBjOWQ5MjY1MDRmMyxjMWJmNjBjNS01YjQxLTExZWQtOTUxYS0wYzlkOTI2NTA0ZjMsMDE4YTQ1YmMtZWVmNi03NzFmLTkzZGEtMzU2NDIyYzRkNTAyLGNkNGFlNWI0LTQxOTctNGUzNC1iNGVmLWNiMmVkNzg4YzNmYiwwMThjYWFhMy1lZDMzLTdkNDAtYmFhMy1iZjRlYTU3NzQ2ZTAsMDE5ODI2NDAtY2Y0YS03ZmQ1LWFiNDMtNzk4M2VmMDJiNmYwLDAxOTgzMTAwLWRiNTYtNzFjYy1iNjRkLTZmODRkMGFjNzBkMCIsImV4cCI6MTc1MzQ2MzE2MCwidXNlcm5hbWUiOiI3YTE1ZTZmNjNlYzM5YmM5In0.oQd_HlYVRr2_vC3U2DP31Vw62oYOgOLgWFD8n9KoEnI"
 }
+video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观", "习近平强军思想"]
+current_video_url_index = 0
+# 全局变量存储当前课程ID和主页面句柄
+main_window_handle = None  # 用于存储主页面的句柄
 
 
 def setup_info_only_logger():
@@ -75,35 +84,34 @@ def parse_courseid_by_regex(url):
     return None
 
 
-video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观", "习近平强军思想"]
-current_video_url_index = 0
-
-
 def open_home2(driver):
+    global current_course_id
     # 打开个人中心，检测未结业班级列表
-    driver.get("https://web.scgb.gov.cn/#/personal")
-    time.sleep(10)
+    # driver.get("https://web.scgb.gov.cn/#/personal")
+    # time.sleep(10)
 
     try:
-        # 等待包含class为num-info的div元素加载完成
-        num_info_div = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "num-info"))
-        )
-
-        # 获取该div下所有的span元素
-        span_elements = num_info_div.find_elements(By.TAG_NAME, "span")
-
-        # 提取所有span元素的文本值
-        span_values = [span.text for span in span_elements if span.text.strip()]
-
-        # 打印结果
-        print("num-info下的所有span值：")
-        for value in span_values:
-            print(value)
+        # # 等待包含class为num-info的div元素加载完成
+        # num_info_div = WebDriverWait(driver, 10).until(
+        #     EC.presence_of_element_located((By.CLASS_NAME, "num-info"))
+        # )
+        #
+        # # 获取该div下所有的span元素
+        # span_elements = num_info_div.find_elements(By.TAG_NAME, "span")
+        #
+        # # 提取所有span元素的文本值
+        # span_values = [span.text for span in span_elements if span.text.strip()]
+        #
+        # # 打印结果
+        # print("num-info下的所有span值：")
+        # # print(span_values[6])
+        # # return span_values[2]=="100%",span_values[5]=="100%"
+        # for value in span_values:
+        #     print(value)
         # 课程观看，分必修和选修
         # 必修
         driver.get("https://web.scgb.gov.cn/#/myClass?id=019815fe-ec44-753d-9b1d-554f017df106&collected=1")
-        time.sleep(10)
+        time.sleep(5)
         # 等待包含class为num-info的div元素加载完成
 
         required_div = WebDriverWait(driver, 10).until(
@@ -113,22 +121,135 @@ def open_home2(driver):
             ))
         )
         required_div.click()
-
+        time.sleep(5)
         required_div = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((
                 By.CLASS_NAME,
                 "course-list"
             ))
         )
+        # 获取必修列表，然后进行播放
+        direct_child_divs = required_div.find_elements(
+            By.XPATH, "./div"  # 注意开头的点表示当前节点（required_div）
+        )
+        # 遍历每个子级div
+        for index, child_div in enumerate(direct_child_divs, 1):
+            try:
+                # 获取当前子div中所有的span标签
+                span_elements = child_div.find_elements(By.TAG_NAME, "span")
 
-    finally:
-        logger.info(" 关闭浏览器")
-        # driver.quit()
+                if span_elements:
+                    # print(f"第{index}个div内的span标签值：")
+                    if not compare_hours_str(span_elements[3].text.strip()):
+                        # 确保元素可点击后再点击
+                        WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable(child_div)
+                        )
+
+                        # 记录当前所有标签页句柄（点击前）
+                        handles_before_click = driver.window_handles
+
+                        # 点击a标签打开新页面
+                        child_div.click()
+
+                        WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(len(handles_before_click) + 1))
+
+                        # 获取所有标签页句柄（点击后）
+                        all_handles = driver.window_handles
+
+                        # 找到新打开的标签页句柄
+                        new_handle = [h for h in all_handles if h not in handles_before_click][0]
+
+                        # 关闭之前的标签页（除了新打开的页面）
+                        for handle in all_handles:
+                            if handle != new_handle:
+                                driver.switch_to.window(handle)
+                                driver.close()
+                                logger.debug(f"已关闭标签页: {handle}")
+
+                        # 切换到新打开的标签页
+                        driver.switch_to.window(new_handle)
+                        logger.debug(f"已切换到新标签页: {new_handle}")
+                        # 获取新页面的URL
+                        new_page_url = driver.current_url
+                        # print(f"新页面URL: {new_page_url}")
+                        # print(f"新页面URL: {extract_id_from_url(new_page_url)}")
+                        # 解析课程ID
+                        current_course_id = extract_id_from_url(new_page_url)
+                        logger.info(f"当前课程ID: {current_course_id}")
+
+                        return False  # 找到未播放视频，返回False停止翻页
+                else:
+                    logger.info(f"第{index}个div内未找到任何span标签")
+
+            except Exception as e:
+                logger.error(f"处理第{index}个div时出错：{str(e)}\n")
+    except TimeoutException:
+        logger.error("超时：未找到class为'course-list'的元素")
+    except Exception as e:
+        logger.error(f"发生错误：{str(e)}")
+
+
+def extract_id_from_url(url):
+    # 解析 URL 结构
+    parsed_url = urlparse(url)
+
+    # 提取哈希（#）后的部分（包含路径和参数）
+    hash_part = parsed_url.fragment  # 结果为：/course?id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
+
+    # 从哈希部分中分离出查询参数（?后面的内容）
+    # 先找到 ? 的位置，截取参数部分
+    query_start = hash_part.find('?')
+    if query_start == -1:
+        return None  # 没有查询参数
+
+    query_string = hash_part[
+                   query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
+
+    # 解析查询参数为字典
+    query_params = parse_qs(query_string)
+
+    # 提取 id 参数（parse_qs 返回的值是列表，取第一个元素）
+    id_value = query_params.get('id', [None])[0]
+    return id_value
+
+def extract_number_from_string(s):
+    """从字符串中提取数字（支持整数和小数）"""
+    # 使用正则表达式匹配数字（包括整数、小数）
+    match = re.search(r'\d+\.?\d*', s)
+    if match:
+        # 转换为浮点数以便比较
+        return float(match.group())
+    return None  # 未找到数字
+def compare_hours_str(hours_str):
+    # 按照 '/' 分割字符串
+    parts = hours_str.split('/')
+
+    # 检查分割后是否正好有两部分
+    if len(parts) != 2:
+        print(f"格式错误：{hours_str} - 无法按照 '/' 分割为两部分")
+        return False
+
+    # 去除两边的空白字符
+    part1 = parts[0].strip()
+    part2 = parts[1].strip()
+
+    # 打印分割后的结果
+    # print(f"分割后：左部分='{part1}', 右部分='{part2}'")
+
+    # 判断是否相等
+    is_equal = (extract_number_from_string(part1) == extract_number_from_string(part2))
+    # print(f"两部分是否相等：{is_equal}\n")
+
+    return is_equal
 
 
 def open_home(driver):
     global current_video_url_index
-    global current_course_id
+    global is_must
+    if is_must:
+        open_home2(driver)
+        return
     logger.info(f"打开首页，检测视频学习情况，current_video_url_index：{current_video_url_index}")
     url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
     driver.get(url)
@@ -184,12 +305,6 @@ def check_study_time():
     except Exception as e:
         logger.error(f"获取学习时长失败: {str(e)}")
         return True
-
-
-# 全局变量存储当前课程ID和主页面句柄
-current_course_id = None
-main_window_handle = None  # 用于存储主页面的句柄
-current_course_id = ""
 
 
 def parse_courseid_by_regex(url):
@@ -490,10 +605,6 @@ def get_formdata_img_src(driver, wait_time=10):
     return ""
 
 
-# 初始化ocr识别器
-ocr = ddddocr.DdddOcr()
-
-
 def recognize_verify_code(image_path=None, image_url=None):
     """使用ddddocr识别验证码"""
     try:
@@ -526,9 +637,6 @@ def exec_main(name, username, password, is_head=True):
     threading.Thread(target=check_course_success, args=(driver, username, password,), daemon=True).start()
 
 
-import configparser
-
-
 def read_config():
     # 创建配置解析器对象
     config = configparser.ConfigParser()
@@ -559,6 +667,8 @@ if __name__ == '__main__':
     username = config['DEFAULT']['username']
     password = config['DEFAULT']['password']
     isHead = bool(config['DEFAULT']['isHead'])
+    if 'isMust' in config['DEFAULT']:
+        is_must = bool(config['DEFAULT']['isMust'])
     if 'startIndex' in config['DEFAULT']:
         current_video_url_index = int(config['DEFAULT']['startIndex'])
     exec_main(name, username, password, is_head=isHead)
