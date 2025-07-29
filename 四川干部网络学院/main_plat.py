@@ -8,11 +8,10 @@ import time
 from urllib.parse import urlparse, parse_qs
 
 import ddddocr
-import pymysql
+import mysql.connector
 import requests
 from flask import Flask, request, jsonify
 from loguru import logger
-from pymysql.cursors import DictCursor
 from selenium import webdriver
 from selenium.common import TimeoutException, NoSuchElementException, ElementNotInteractableException
 from selenium.webdriver.chrome.options import Options
@@ -53,63 +52,89 @@ def setup_info_only_logger():
 setup_info_only_logger()
 
 
-# 初始化数据库链接
+# 初始化数据库连接
 def init_mysql_client():
     # 连接到MySQL服务器
-    connection = pymysql.connect(
+    connection = mysql.connector.connect(
         host="111.229.144.57",
         port=10003,
         user='root',
         password='WHATwin1688@%^=,.',
         database='test-video',
         charset='utf8mb4',
-        cursorclass=DictCursor
     )
-    cursor = connection.cursor()
+    cursor = connection.cursor(dictionary=True)
 
     return connection, cursor
 
 
 connection, cursor = init_mysql_client()
-logger.info("初始化数据库")
+logger.info("初始化数据库连接成功")
 
 
 def select_data():
-    # 2. 执行查询
+    # 执行查询
     query_sql = """
-           SELECT id, name, username,password, is_head, start_index,is_must,status, created_at
-           FROM tasks_dev
+           SELECT id, name, username, password, is_head, start_index, status, created_at
+           FROM tasks_prd
            ORDER BY created_at DESC;
            """
     cursor.execute(query_sql)
 
-    # 3. 获取查询结果
+    # 获取查询结果
     results = cursor.fetchall()
 
-    # 4. 打印结果
+    # 打印结果
     if not results:
         print("task_config表中没有数据")
         return
     # 打印表头
     print(
-        f"{'ID':<5} {'名称':<15} {'用户名':<10}{'密码':<15} {'是否头部':<8} {'起始索引':<8}{'是否必修':<8}{'状态':<8} {'创建时间'}")
+        f"{'ID':<5} {'名称':<10} {'用户名':<15} {'密码':<15} {'是否头部':<8} {'起始索引':<8} {'状态':<8} {'创建时间'}")
     print("-" * 80)
 
     # 打印每条记录
     for row in results:
+        # 处理datetime对象的格式化
+        created_at = row['created_at'].strftime('%Y-%m-%d %H:%M:%S') if row['created_at'] else ''
         print(
             f"{row['id']:<5} "
             f"{row['name']:<15} "
             f"{row['username']:<10} "
-            f"{row['password']:<10} "
-            f"{'是' if row['is_head'] else '否':<8} "
+            f"{row['password']:<15} "
+            f"{row['is_head']:<8} "
             f"{row['start_index']:<8} "
             f"{row['status']:<8} "
-            f"{row['created_at'].strftime('%Y-%m-%d %H:%M:%S')}"
+            f"{created_at}"
         )
 
     print(f"\n共查询到 {len(results)} 条记录")
     return results
+
+
+def insert_data(name, username, password, is_head, start_index):
+    # 插入一条数据
+    insert_sql = """
+           INSERT INTO tasks_prd (name, type,username, password, is_head, start_index, status)
+           VALUES (%s, %s,%s, %s, %s, %s, %s)
+           """
+    # 插入的数据
+    user_data = (name, '1', username, password, is_head, start_index, 1)
+    cursor.execute(insert_sql, user_data)
+    connection.commit()
+    logger.info(f"{username}数据插入成功")
+
+
+def update_data(username):
+    # 插入一条数据
+    update_sql = """
+                UPDATE tasks_prd set status=%s where username=%s
+               """
+    # 插入的数据
+    user_data = (username, '2')
+    cursor.execute(update_sql, user_data)
+    connection.commit()
+    logger.info("数据更新成功")
 
 
 def continue_task():
@@ -118,10 +143,11 @@ def continue_task():
         # 判断是否执行完成
         if row['status'] != '2':
             check = TeacherTrainingChecker(row['name'], row['username'], row['password'],
-                                           row['is_head'], row['start_index'], row['is_must'])
+                                           row['is_head'], row['start_index'])
             thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
             thread.start()  # 启动线程
-    print("继续未完成的工作")
+            time.sleep(10)
+    logger.info("继续未完成的工作")
 
 
 def parse_courseid_by_regex(url):
@@ -213,7 +239,7 @@ def compare_hours_str(hours_str):
 
 
 class TeacherTrainingChecker:
-    def __init__(self, name, username, password, isHead, current_video_url_index, is_must=True):
+    def __init__(self, name, username, password, isHead, current_video_url_index):
         """
         初始化教师培训课程检查器（使用外部传入的浏览器实例）
 
@@ -248,7 +274,7 @@ class TeacherTrainingChecker:
         # 指定视频课程
         self.specify_video = []
         # 是否必修
-        self.is_must = is_must
+        self.is_must = False
 
     def get_local_storage_value(self, key):
         """从localStorage中获取指定键的值"""
@@ -296,7 +322,9 @@ class TeacherTrainingChecker:
             return
         if self.play_specify_video():
             return
-        logger.info(f"打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
+        logger.info(f"{self.user_data_dir}进行选修学习")
+        logger.info(
+            f"{self.user_data_dir}打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
         url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
         self.driver.get(url)
         # 切换左侧标签
@@ -331,12 +359,12 @@ class TeacherTrainingChecker:
                     element = WebDriverWait(self.driver, 10).until(
                         EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
                     )
-                    logger.info("存在 class 为 'ivu-page-next' 的元素")
+                    logger.info(f"{self.user_data_dir}存在 class 为 'ivu-page-next' 的元素")
                     element.click()
                     time.sleep(2)
                     is_next_page = self.judge_is_next_page()
                 except Exception as e:
-                    logger.error("两个类名的元素都不存在")
+                    logger.error(f"{self.user_data_dir}两个类名的元素都不存在")
 
             except Exception as e:
                 logger.error(f"翻页操作失败: {str(e)}")
@@ -453,7 +481,32 @@ class TeacherTrainingChecker:
             else:
                 return True
         except Exception as e:
-            logger.error(f"获取学习时长失败: {str(e)}")
+            logger.error(f"{self.user_data_dir}获取学习时长失败: {str(e)}")
+            return True
+
+    def check_study_time2(self):
+        logger.info(f"{self.user_data_dir}判断当前学习任务选修和必修是否完成")
+        url = "https://api.scgb.gov.cn/api/services/app/class/app/getClassDetailByUserId?classId=019815fe-ec44-753d-9b1d-554f017df106"
+        try:
+            response = requests.get(url=url, headers=self.headers)
+            response_json = response.json()
+            logger.info(f"{self.user_data_dir}学习进度详情：{response_json}")
+            # 判断选修
+            if int(response_json['result']['electivePeriod']) < int(
+                    response_json['result']['classElectiveTimes']) * 60 * 60:
+                logger.info(f"{self.user_data_dir}准备选修")
+                self.is_must = False
+                return True
+            elif int(response_json['result']['requiredPeriod']) < int(response_json['result']['classTimes']) * 60 * 60:
+                logger.info(f"{self.user_data_dir}准备必修")
+                self.is_must = True
+                return True
+            # 判断必修
+            logger.info("选修和必修已全部学完，结束课程")
+
+            return False
+        except Exception as e:
+            logger.error(f"{self.user_data_dir}获取学习时长失败: {str(e)}")
             return True
 
     def judge_is_next_page(self):
@@ -471,7 +524,7 @@ class TeacherTrainingChecker:
 
             # 获取该div下的所有a标签
             a_tags = list_div.find_elements(By.TAG_NAME, "a")
-            logger.info(f"共找到{len(a_tags)}个a标签元素")
+            # logger.info(f"共找到{len(a_tags)}个a标签元素")
 
             # 遍历每个a标签，检查是否包含class为"status success"的div
             for index, a_tag in enumerate(a_tags, 1):
@@ -480,10 +533,10 @@ class TeacherTrainingChecker:
                     a_href = a_tag.get_attribute("href")
                     # 检查当前a标签内是否存在class为"status success"的div
                     a_tag.find_element(By.XPATH, ".//div[@class='status success']")
-                    logger.info(f"第{index}个a标签：视频播放完成")
+                    # logger.info(f"第{index}个a标签：视频播放完成")
 
                 except NoSuchElementException:
-                    logger.info(f"第{index}个a标签:视频未播放完成，在新的标签页开始播放视频")
+                    logger.info(f"{self.user_data_dir}第{index}个a标签:视频未播放完成，在新的标签页开始播放视频")
 
                     # 记录当前所有标签页句柄（点击前）
                     handles_before_click = self.driver.window_handles
@@ -513,14 +566,14 @@ class TeacherTrainingChecker:
 
                     # 解析课程ID
                     self.current_course_id = parse_courseid_by_regex(a_href)
-                    logger.info(f"当前课程ID: {self.current_course_id}")
+                    logger.info(f"{self.user_data_dir}当前课程ID: {self.current_course_id}")
 
                     return False  # 找到未播放视频，返回False停止翻页
 
                 except Exception as e:
                     logger.error(f"处理第{index}个a标签时出错: {str(e)}")
 
-            logger.info("未找到需要播放的视频，点击下一页")
+            logger.info(f"{self.user_data_dir}未找到需要播放的视频，点击下一页")
             return True  # 所有视频已完成，返回True继续翻页
 
         except TimeoutException:
@@ -554,7 +607,7 @@ class TeacherTrainingChecker:
                     detail_json = course_detail.json()["result"]
                     logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
                     if detail_json["totalPeriod"] == detail_json["watchTimes"]:
-                        if self.check_study_time():
+                        if self.check_study_time2():
                             # 播放下一个视频
                             logger.info(
                                 f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
@@ -602,6 +655,7 @@ class TeacherTrainingChecker:
             time.sleep(sleep_time)
 
     def init_browser(self):
+        logger.info("开始初始化浏览器文件夹")
         # 创建保存用户数据的目录
         user_data_dir = os.path.join(os.getcwd(), "data", self.user_data_dir)
         os.makedirs(user_data_dir, exist_ok=True)
@@ -622,6 +676,7 @@ class TeacherTrainingChecker:
 
         # 初始化 Chrome 浏览器驱动
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        logger.info("浏览器文件夹初始化成功")
 
     def is_login(self):
         while True:
@@ -712,41 +767,31 @@ class TeacherTrainingChecker:
         self.init_browser()
         # 判断用户是否登录
         self.is_login()
+        self.check_study_time2()
         self.open_home()
         threading.Thread(target=self.check_course_success, daemon=True).start()
         while self.is_running:
             time.sleep(1)
-        print("视频已全部播放完成")
+        logger.info("视频已全部播放完成")
+        update_data(self.username)
 
 
 # 删除物品
 @app.route('/execTask', methods=['POST'])
 def delete_item():
-    # print("2222")
-    if not request.json or 'name' not in request.json:
-        return jsonify({"error": "请求格式错误，需要包含'name'字段"}), 400
-    # 参数校验
-    new_item = {
-        "name": request.json['name'],
-        "type": request.json['type'],
-        "username": request.json['username'],
-        "password": request.json['password'],
-        "isHead": bool(request.json['isHead']),
-        "startIndex": int(request.json.get('startIndex', 0))
-    }
     # 创建对象，执行任务
-
+    logger.info("创建对象，执行任务")
     check = TeacherTrainingChecker(request.json['name'], request.json['username'], request.json['password'],
                                    request.json['isHead'], request.json['startIndex'])
     thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
     thread.start()  # 启动线程
-
+    # 保存到数据库中
+    insert_data(request.json['name'], request.json['username'], request.json['password'], request.json['isHead'],
+                request.json['startIndex'])
+    logger.info("任务已保存到数据库中，并开始执行")
     return jsonify({"result": "任务已开始"}), 200
-
-
-# 查询用户观看时长
 
 
 if __name__ == '__main__':
     continue_task()
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5002)
