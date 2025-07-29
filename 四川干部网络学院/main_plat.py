@@ -1,3 +1,4 @@
+import configparser
 import json
 import os
 import random
@@ -25,6 +26,32 @@ app = Flask(__name__)
 
 # 初始化ocr识别器
 ocr = ddddocr.DdddOcr()
+
+
+def read_config():
+    # 创建配置解析器对象
+    config = configparser.ConfigParser()
+
+    # 获取配置文件路径（兼容开发环境和打包后的环境）
+    if getattr(sys, 'frozen', False):
+        # 打包后的环境
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        # 开发环境
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    config_path = os.path.join(base_dir, 'config.ini')
+
+    # 检查配置文件是否存在
+    if not os.path.exists(config_path):
+        print(f"错误：配置文件 {config_path} 不存在！")
+        return
+        # 读取配置文件
+    config.read(config_path, encoding='utf-8')
+    return config
+
+
+config = read_config()
 
 
 def setup_info_only_logger():
@@ -71,12 +98,14 @@ def init_mysql_client():
 connection, cursor = init_mysql_client()
 logger.info("初始化数据库连接成功")
 
+table_name = config['database']['tableName']
+
 
 def select_data():
     # 执行查询
-    query_sql = """
+    query_sql = f"""
            SELECT id, name, username, password, is_head, start_index, status, created_at
-           FROM tasks_prd
+           FROM {table_name}
            ORDER BY created_at DESC;
            """
     cursor.execute(query_sql)
@@ -114,8 +143,8 @@ def select_data():
 
 def insert_data(name, username, password, is_head, start_index):
     # 插入一条数据
-    insert_sql = """
-           INSERT INTO tasks_prd (name, type,username, password, is_head, start_index, status)
+    insert_sql = f"""
+           INSERT INTO {table_name} (name, type,username, password, is_head, start_index, status)
            VALUES (%s, %s,%s, %s, %s, %s, %s)
            """
     # 插入的数据
@@ -127,14 +156,14 @@ def insert_data(name, username, password, is_head, start_index):
 
 def update_data(username):
     # 插入一条数据
-    update_sql = """
-                UPDATE tasks_prd set status=%s where username=%s
+    update_sql = f"""
+                UPDATE {table_name} set status=%s where username=%s
                """
     # 插入的数据
-    user_data = (username, '2')
+    user_data = ('2', username)
     cursor.execute(update_sql, user_data)
     connection.commit()
-    logger.info("数据更新成功")
+    logger.info(f"{username}数据更新成功")
 
 
 def continue_task():
@@ -275,6 +304,8 @@ class TeacherTrainingChecker:
         self.specify_video = []
         # 是否必修
         self.is_must = False
+        # 是否完成全部视频
+        self.is_complete = False
 
     def get_local_storage_value(self, key):
         """从localStorage中获取指定键的值"""
@@ -317,6 +348,8 @@ class TeacherTrainingChecker:
         return False
 
     def open_home(self):
+        if self.is_complete:
+            return
         if self.is_must:
             self.open_home2()
             return
@@ -502,8 +535,9 @@ class TeacherTrainingChecker:
                 self.is_must = True
                 return True
             # 判断必修
-            logger.info("选修和必修已全部学完，结束课程")
-
+            logger.info(f"{self.user_data_dir}选修和必修已全部学完，结束课程")
+            self.is_complete = True
+            self.is_running = False
             return False
         except Exception as e:
             logger.error(f"{self.user_data_dir}获取学习时长失败: {str(e)}")
@@ -586,7 +620,7 @@ class TeacherTrainingChecker:
     def check_course_success(self):
         sleep_time = 10
         call_login = False
-        while True:
+        while self.is_running:
             if self.sleep_time_num == 3:
                 logger.info(f"{self.user_data_dir}睡眠重复次数超过3次，重新打开页面")
                 self.is_login()
@@ -772,7 +806,7 @@ class TeacherTrainingChecker:
         threading.Thread(target=self.check_course_success, daemon=True).start()
         while self.is_running:
             time.sleep(1)
-        logger.info("视频已全部播放完成")
+        logger.info(f"{self.user_data_dir}视频已全部播放完成")
         update_data(self.username)
 
 
