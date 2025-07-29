@@ -448,7 +448,7 @@ def check_course_success(driver, username, password):
 
 def init_browser(user_data_dir, is_headless=False):
     # 创建保存用户数据的目录
-    user_data_dir = os.path.join(os.getcwd(), user_data_dir)
+    user_data_dir = os.path.join(os.getcwd(),"data", user_data_dir)
     os.makedirs(user_data_dir, exist_ok=True)
     logger.debug(f"用户数据目录: {user_data_dir}")
 
@@ -587,7 +587,7 @@ def get_formdata_img_src(driver, wait_time=10):
             EC.presence_of_element_located((By.CLASS_NAME, "validate-form-img"))
         )
         logger.info("找到验证码图片容器")
-        save_path = "captcha_screenshot.png"  # 保存路径可自定义
+        save_path = "./png/captcha_screenshot.png"  # 保存路径可自定义
         success = formdata_div.screenshot(save_path)
 
         if success:

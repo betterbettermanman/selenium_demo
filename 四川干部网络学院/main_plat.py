@@ -358,70 +358,88 @@ class TeacherTrainingChecker:
             )
             required_div.click()
             time.sleep(5)
-            required_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((
-                    By.CLASS_NAME,
-                    "course-list"
-                ))
-            )
-            # 获取必修列表，然后进行播放
-            direct_child_divs = required_div.find_elements(
-                By.XPATH, "./div"  # 注意开头的点表示当前节点（required_div）
-            )
-            # 遍历每个子级div
-            for index, child_div in enumerate(direct_child_divs, 1):
+            is_next_page = self.judge_is_next_page2()
+            while is_next_page:
+                # 如果不存在，检查是否只存在"ivu-page-next"类的元素
                 try:
-                    # 获取当前子div中所有的span标签
-                    span_elements = child_div.find_elements(By.TAG_NAME, "span")
-
-                    if span_elements:
-                        # print(f"第{index}个div内的span标签值：")
-                        if not compare_hours_str(span_elements[3].text.strip()):
-                            # 确保元素可点击后再点击
-                            WebDriverWait(self.driver, 5).until(
-                                EC.element_to_be_clickable(child_div)
-                            )
-
-                            # 记录当前所有标签页句柄（点击前）
-                            handles_before_click = self.driver.window_handles
-
-                            # 点击a标签打开新页面
-                            child_div.click()
-
-                            WebDriverWait(self.driver, 10).until(
-                                EC.number_of_windows_to_be(len(handles_before_click) + 1))
-
-                            # 获取所有标签页句柄（点击后）
-                            all_handles = self.driver.window_handles
-
-                            # 找到新打开的标签页句柄
-                            new_handle = [h for h in all_handles if h not in handles_before_click][0]
-
-                            # 关闭之前的标签页（除了新打开的页面）
-                            for handle in all_handles:
-                                if handle != new_handle:
-                                    self.driver.switch_to.window(handle)
-                                    self.driver.close()
-                                    logger.debug(f"已关闭标签页: {handle}")
-
-                            # 切换到新打开的标签页
-                            self.driver.switch_to.window(new_handle)
-                            logger.info(f"已切换到新标签页: {new_handle}")
-                            # 获取新页面的URL
-                            new_page_url = self.driver.current_url
-                            # 解析课程ID
-                            self.current_course_id = extract_id_from_url(new_page_url)
-                            logger.info(f"{self.user_data_dir}当前课程ID: {self.current_course_id}")
-                            return False  # 找到未播放视频，返回False停止翻页
-                    else:
-                        print(f"第{index}个div内未找到任何span标签")
-
+                    element = WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
+                    )
+                    logger.info(f"{self.user_data_dir}存在 下一页 的元素，点击")
+                    element.click()
+                    time.sleep(2)
+                    is_next_page = self.judge_is_next_page2()
                 except Exception as e:
-                    print(f"处理第{index}个div时出错：{str(e)}\n")
+                    logger.error("两个类名的元素都不存在")
+
         except TimeoutException:
             print("超时：未找到class为'course-list'的元素")
         except Exception as e:
             print(f"发生错误：{str(e)}")
+
+    def judge_is_next_page2(self):
+        logger.info(f"{self.user_data_dir}判断是否有可以播放的视频")
+        required_div = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((
+                By.CLASS_NAME,
+                "course-list"
+            ))
+        )
+        # 获取必修列表，然后进行播放
+        direct_child_divs = required_div.find_elements(
+            By.XPATH, "./div"  # 注意开头的点表示当前节点（required_div）
+        )
+        # 遍历每个子级div
+        for index, child_div in enumerate(direct_child_divs, 1):
+            try:
+                # 获取当前子div中所有的span标签
+                span_elements = child_div.find_elements(By.TAG_NAME, "span")
+
+                if span_elements:
+                    # print(f"第{index}个div内的span标签值：")
+                    if not compare_hours_str(span_elements[3].text.strip()):
+                        # 确保元素可点击后再点击
+                        WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable(child_div)
+                        )
+
+                        # 记录当前所有标签页句柄（点击前）
+                        handles_before_click = self.driver.window_handles
+
+                        # 点击a标签打开新页面
+                        child_div.click()
+
+                        WebDriverWait(self.driver, 10).until(
+                            EC.number_of_windows_to_be(len(handles_before_click) + 1))
+
+                        # 获取所有标签页句柄（点击后）
+                        all_handles = self.driver.window_handles
+
+                        # 找到新打开的标签页句柄
+                        new_handle = [h for h in all_handles if h not in handles_before_click][0]
+
+                        # 关闭之前的标签页（除了新打开的页面）
+                        for handle in all_handles:
+                            if handle != new_handle:
+                                self.driver.switch_to.window(handle)
+                                self.driver.close()
+                                logger.debug(f"已关闭标签页: {handle}")
+
+                        # 切换到新打开的标签页
+                        self.driver.switch_to.window(new_handle)
+                        logger.info(f"{self.user_data_dir}已切换到新标签页: {new_handle}")
+                        # 获取新页面的URL
+                        new_page_url = self.driver.current_url
+                        # 解析课程ID
+                        self.current_course_id = extract_id_from_url(new_page_url)
+                        logger.info(f"{self.user_data_dir}当前课程ID: {self.current_course_id}")
+                        return False  # 找到未播放视频，返回False停止翻页
+
+            except Exception as e:
+                print(f"处理第{index}个div时出错：{str(e)}\n")
+
+        logger.info(f"{self.user_data_dir}未找到需要播放的视频，点击下一页")
+        return True  # 所有视频已完成，返回True继续翻页
 
     def check_study_time(self):
         logger.info(f"{self.user_data_dir}判断当前学习任务是否大于50学时")
@@ -517,7 +535,7 @@ class TeacherTrainingChecker:
         call_login = False
         while True:
             if self.sleep_time_num == 3:
-                logger.info("睡眠重复次数超过3次，重新打开页面")
+                logger.info(f"{self.user_data_dir}睡眠重复次数超过3次，重新打开页面")
                 self.is_login()
                 threading.Thread(target=self.open_home, daemon=True).start()
                 self.current_course_id = ""
