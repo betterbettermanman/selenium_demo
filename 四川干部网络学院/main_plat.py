@@ -1,4 +1,3 @@
-import configparser
 import json
 import os
 import random
@@ -9,7 +8,6 @@ import time
 from urllib.parse import urlparse, parse_qs
 
 import ddddocr
-import mysql.connector
 import requests
 from flask import Flask, request, jsonify
 from loguru import logger
@@ -26,32 +24,6 @@ app = Flask(__name__)
 
 # 初始化ocr识别器
 ocr = ddddocr.DdddOcr()
-
-
-def read_config():
-    # 创建配置解析器对象
-    config = configparser.ConfigParser()
-
-    # 获取配置文件路径（兼容开发环境和打包后的环境）
-    if getattr(sys, 'frozen', False):
-        # 打包后的环境
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        # 开发环境
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    config_path = os.path.join(base_dir, 'config.ini')
-
-    # 检查配置文件是否存在
-    if not os.path.exists(config_path):
-        print(f"错误：配置文件 {config_path} 不存在！")
-        return
-        # 读取配置文件
-    config.read(config_path, encoding='utf-8')
-    return config
-
-
-config = read_config()
 
 
 def setup_info_only_logger():
@@ -79,55 +51,50 @@ def setup_info_only_logger():
 setup_info_only_logger()
 
 
-# 初始化数据库连接
-def init_mysql_client():
-    # 连接到MySQL服务器
-    connection = mysql.connector.connect(
-        host="111.229.144.57",
-        port=10003,
-        user='root',
-        password='WHATwin1688@%^=,.',
-        database='test-video',
-        charset='utf8mb4',
-    )
-    cursor = connection.cursor(dictionary=True)
+def read_json_config(config_path):
+    """
+    读取JSON配置文件
+    :param config_path: 配置文件路径
+    :return: 配置字典，如果出错返回None
+    """
+    try:
+        # 检查文件是否存在
+        if not os.path.exists(config_path):
+            print(f"错误：配置文件 {config_path} 不存在")
+            return None
 
-    return connection, cursor
+        # 打开并读取JSON文件
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)  # 自动转换为Python字典/列表
+            return config
+
+    except json.JSONDecodeError as e:
+        print(f"错误：JSON格式解析失败 - {str(e)}")
+        return None
+    except Exception as e:
+        print(f"读取配置文件出错 - {str(e)}")
+        return None
 
 
-connection, cursor = init_mysql_client()
-logger.info("初始化数据库连接成功")
-
-table_name = config['database']['tableName']
+config_path = "play_result.json"
+play_result_data = read_json_config(config_path)
 
 
 def select_data():
-    # 执行查询
-    query_sql = f"""
-           SELECT id, name, username, password, is_head, start_index, status, created_at
-           FROM {table_name}
-           ORDER BY created_at DESC;
-           """
-    cursor.execute(query_sql)
-
-    # 获取查询结果
-    results = cursor.fetchall()
-
     # 打印结果
-    if not results:
+    if not play_result_data:
         print("task_config表中没有数据")
         return
     # 打印表头
     print(
-        f"{'ID':<5} {'名称':<10} {'用户名':<15} {'密码':<15} {'是否头部':<8} {'起始索引':<8} {'状态':<8} {'创建时间'}")
+        f" {'名称':<10} {'用户名':<15} {'密码':<15} {'是否头部':<8} {'起始索引':<8} {'状态':<8} {'创建时间'}")
     print("-" * 80)
 
     # 打印每条记录
-    for row in results:
+    for row in play_result_data:
         # 处理datetime对象的格式化
         created_at = row['created_at'].strftime('%Y-%m-%d %H:%M:%S') if row['created_at'] else ''
         print(
-            f"{row['id']:<5} "
             f"{row['name']:<15} "
             f"{row['username']:<10} "
             f"{row['password']:<15} "
@@ -137,32 +104,43 @@ def select_data():
             f"{created_at}"
         )
 
-    print(f"\n共查询到 {len(results)} 条记录")
-    return results
+    print(f"\n共查询到 {len(play_result_data)} 条记录")
+    return play_result_data
 
 
 def insert_data(name, username, password, is_head, start_index):
     # 插入一条数据
-    insert_sql = f"""
-           INSERT INTO {table_name} (name, type,username, password, is_head, start_index, status)
-           VALUES (%s, %s,%s, %s, %s, %s, %s)
-           """
-    # 插入的数据
-    user_data = (name, '1', username, password, is_head, start_index, 1)
-    cursor.execute(insert_sql, user_data)
-    connection.commit()
-    logger.info(f"{username}数据插入成功")
+    play_result_data.update({
+        "name": name,
+        "username": username,
+        "password": password,
+        "is_head": is_head,
+        "start_index": start_index,
+        "no_play_videos": [],
+        "status": 1,
+        "requiredPeriod": "",
+        "electivePeriod": "",
+        "created_at": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "updated_at": ""
+    })
+    #  写回文件（保持缩进和中文显示）
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(play_result_data, f, ensure_ascii=False, indent=2)  # indent=2 保持格式化
 
 
-def update_data(username):
-    # 插入一条数据
-    update_sql = f"""
-                UPDATE {table_name} set status=%s where username=%s
-               """
-    # 插入的数据
-    user_data = ('2', username)
-    cursor.execute(update_sql, user_data)
-    connection.commit()
+def update_data(username, status=None, requiredPeriod=None, electivePeriod=None):
+    for data in play_result_data:
+        if data['username'] == username:
+            if status:
+                data['status'] = status
+            if requiredPeriod:
+                data['requiredPeriod'] = requiredPeriod
+            if electivePeriod:
+                data['electivePeriod'] = electivePeriod
+            data["updated_at"] = time.strftime('%Y-%m-%d %H:%M:%S')
+    #  写回文件（保持缩进和中文显示）
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(play_result_data, f, ensure_ascii=False, indent=2)  # indent=2 保持格式化
     logger.info(f"{username}数据更新成功")
 
 
@@ -172,7 +150,7 @@ def continue_task():
         # 判断是否执行完成
         if row['status'] != '2':
             check = TeacherTrainingChecker(row['name'], row['username'], row['password'],
-                                           row['is_head'], row['start_index'])
+                                           row['is_head'], row['start_index'], row['no_play_videos'])
             thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
             thread.start()  # 启动线程
             time.sleep(10)
@@ -268,7 +246,7 @@ def compare_hours_str(hours_str):
 
 
 class TeacherTrainingChecker:
-    def __init__(self, name, username, password, isHead, current_video_url_index):
+    def __init__(self, name, username, password, isHead, current_video_url_index, no_play_videos=None):
         """
         初始化教师培训课程检查器（使用外部传入的浏览器实例）
 
@@ -276,6 +254,8 @@ class TeacherTrainingChecker:
         :param target_courses: 需要检查的目标课程列表
         :param base_url: 培训首页URL
         """
+        if no_play_videos is None:
+            no_play_videos = []
         self.is_headless = isHead
         self.user_data_dir = name
         self.username = username
@@ -295,7 +275,7 @@ class TeacherTrainingChecker:
         self.video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观",
                            "习近平强军思想"]
         self.current_video_url_index = current_video_url_index
-        # 默认检测时间，当时间重复3次，说明观看异常，重新打开页面进行观看 todo
+        # 默认检测时间，当时间重复3次，说明观看异常，重新打开页面进行观看
         self.sleep_time = 10
         self.sleep_time_num = 0
         # 全局变量存储当前课程ID和主页面句柄
@@ -306,6 +286,8 @@ class TeacherTrainingChecker:
         self.is_must = False
         # 是否完成全部视频
         self.is_complete = False
+        # 不看的视频id
+        self.no_play_videos = no_play_videos
 
     def get_local_storage_value(self, key):
         """从localStorage中获取指定键的值"""
@@ -479,6 +461,21 @@ class TeacherTrainingChecker:
                         # 找到新打开的标签页句柄
                         new_handle = [h for h in all_handles if h not in handles_before_click][0]
 
+                        # 切换到新标签页以获取URL
+                        self.driver.switch_to.window(new_handle)
+                        new_page_url = self.driver.current_url
+
+                        # 检查cursor_id是否为目标值（这里假设目标值是"special_cursor_id"）
+                        if extract_id_from_url(new_page_url) in self.no_play_videos:
+                            # 如果是目标cursor_id，关闭新页面
+                            self.driver.close()
+                            logger.info(f"{self.user_data_dir}检测到目标cursor_id，已关闭新页面")
+
+                            # 切换回原来的页面
+                            self.driver.switch_to.window(handles_before_click[0])
+                            continue
+
+                        # 如果不是目标cursor_id，继续处理
                         # 关闭之前的标签页（除了新打开的页面）
                         for handle in all_handles:
                             if handle != new_handle:
@@ -489,8 +486,6 @@ class TeacherTrainingChecker:
                         # 切换到新打开的标签页
                         self.driver.switch_to.window(new_handle)
                         logger.info(f"{self.user_data_dir}已切换到新标签页: {new_handle}")
-                        # 获取新页面的URL
-                        new_page_url = self.driver.current_url
                         # 解析课程ID
                         self.current_course_id = extract_id_from_url(new_page_url)
                         logger.info(f"{self.user_data_dir}当前课程ID: {self.current_course_id}")
@@ -517,6 +512,32 @@ class TeacherTrainingChecker:
             logger.error(f"{self.user_data_dir}获取学习时长失败: {str(e)}")
             return True
 
+    def send_check_result(self, requiredPeriod, electivePeriod, mentioned_list=None, mentioned_mobile_list=None):
+        update_data(self.username, requiredPeriod=requiredPeriod, electivePeriod=electivePeriod)
+        content = self.user_data_dir + "：必修:" + requiredPeriod + ";选修:" + electivePeriod
+        data = {
+            "msgtype": "text",
+            "text": {
+                "content": content,
+                "mentioned_list": mentioned_list or [],
+                "mentioned_mobile_list": mentioned_mobile_list or []
+            }
+        }
+        """通用发送方法"""
+        try:
+            response = requests.post(
+                url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=edf2d6ba-55f1-48da-a5ce-619b329a1ec8",
+                data=json.dumps(data),
+                headers={"Content-Type": "application/json"}
+            )
+            result = response.json()
+            if result.get("errcode") != 0:
+                logger.info(f"发送失败：{result.get('errmsg')}")
+            else:
+                logger.info("发送成功")
+        except Exception as e:
+            logger.error(f"请求异常：{str(e)}")
+
     def check_study_time2(self):
         logger.info(f"{self.user_data_dir}判断当前学习任务选修和必修是否完成")
         url = "https://api.scgb.gov.cn/api/services/app/class/app/getClassDetailByUserId?classId=019815fe-ec44-753d-9b1d-554f017df106"
@@ -524,6 +545,8 @@ class TeacherTrainingChecker:
             response = requests.get(url=url, headers=self.headers)
             response_json = response.json()
             logger.info(f"{self.user_data_dir}学习进度详情：{response_json}")
+            self.send_check_result(str(round(int(response_json['result']['requiredPeriod']) / 3600, 1)),
+                                   str(round(int(response_json['result']['electivePeriod']) / 3600, 1)))
             # 判断选修
             if int(response_json['result']['electivePeriod']) < int(
                     response_json['result']['classElectiveTimes']) * 60 * 60:
@@ -689,7 +712,7 @@ class TeacherTrainingChecker:
             time.sleep(sleep_time)
 
     def init_browser(self):
-        logger.info("开始初始化浏览器文件夹")
+        logger.info(f"{self.user_data_dir}开始初始化浏览器文件夹")
         # 创建保存用户数据的目录
         user_data_dir = os.path.join(os.getcwd(), "data", self.user_data_dir)
         os.makedirs(user_data_dir, exist_ok=True)
@@ -710,7 +733,7 @@ class TeacherTrainingChecker:
 
         # 初始化 Chrome 浏览器驱动
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
-        logger.info("浏览器文件夹初始化成功")
+        logger.info(f"{self.user_data_dir}浏览器文件夹初始化成功")
 
     def is_login(self):
         while True:
@@ -807,12 +830,13 @@ class TeacherTrainingChecker:
         while self.is_running:
             time.sleep(1)
         logger.info(f"{self.user_data_dir}视频已全部播放完成")
-        update_data(self.username)
+        self.driver.close()
+        update_data(self.username, status="2")
 
 
-# 删除物品
+# 执行任务
 @app.route('/execTask', methods=['POST'])
-def delete_item():
+def exec_task():
     # 创建对象，执行任务
     logger.info("创建对象，执行任务")
     check = TeacherTrainingChecker(request.json['name'], request.json['username'], request.json['password'],
