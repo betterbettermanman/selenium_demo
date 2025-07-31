@@ -1,0 +1,28 @@
+[
+  {
+    "name": "杨乐潇",
+    "username": "18283028464",
+    "password": "yyx@520123",
+    "is_head": 1,
+    "start_index": 0,
+    "no_play_videos": [],
+    "status": "1",
+    "requiredPeriod": "20.1",
+    "electivePeriod": "2.9",
+    "created_at": "",
+    "updated_at": "2025-07-31 15:18:02"
+  },
+  {
+    "name": "李清松",
+    "username": "18228237529",
+    "password": "Abcd1234",
+    "is_head": 1,
+    "start_index": 1,
+    "no_play_videos": [],
+    "status": 1,
+    "requiredPeriod": "1.5",
+    "electivePeriod": "0.0",
+    "created_at": "",
+    "updated_at": "2025-07-31 15:20:33"
+  }
+]

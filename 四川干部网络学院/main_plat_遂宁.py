@@ -76,7 +76,7 @@ def read_json_config(config_path):
         return None
 
 
-config_path = "play_result.json"
+config_path = "play_result_遂宁.json"
 play_result_data = read_json_config(config_path)
 
 
@@ -353,7 +353,6 @@ class TeacherTrainingChecker:
             time.sleep(5)
         except Exception as e:
             logger.error(f"检测首页异常，进行重试")
-            time.sleep(10)
             threading.Thread(target=self.open_home, daemon=True).start()
             return
         is_next_page = self.judge_is_next_page()
@@ -390,7 +389,7 @@ class TeacherTrainingChecker:
         try:
             logger.info(f"{self.user_data_dir}进行必修学习")
             # 必修
-            self.driver.get("https://web.scgb.gov.cn/#/myClass?id=019815fe-ec44-753d-9b1d-554f017df106&collected=1")
+            self.driver.get("https://web.scgb.gov.cn/#/myClass?id=0197beca-df9e-7a23-9b84-eb2bb4c43ecf&collected=1")
             time.sleep(5)
             # 等待包含class为num-info的div元素加载完成
 
@@ -850,4 +849,4 @@ def exec_task():
 
 if __name__ == '__main__':
     continue_task()
-    app.run(host='0.0.0.0', port=5002)
+    app.run(host='0.0.0.0', port=6002)
