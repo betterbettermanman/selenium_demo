@@ -76,7 +76,7 @@ def read_json_config(config_path):
         return None
 
 
-config_path = "play_result.json"
+config_path = "config.json"
 play_result_data = read_json_config(config_path)
 
 
@@ -289,6 +289,16 @@ class TeacherTrainingChecker:
         # 不看的视频id
         self.no_play_videos = no_play_videos
 
+    def get_session_storage_value(self, key):
+        """从sessionStorage中获取指定键的值"""
+        try:
+            # 使用JavaScript获取sessionStorage中的值
+            value = self.driver.execute_script(f"return window.sessionStorage.getItem('{key}');")
+            return value
+        except Exception as e:
+            logger.error("获取sessionStorage值失败")
+            return None
+
     def get_local_storage_value(self, key):
         """从localStorage中获取指定键的值"""
         try:
@@ -330,61 +340,57 @@ class TeacherTrainingChecker:
         return False
 
     def open_home(self):
+        time.sleep(10000)
         if self.is_complete:
             return
-        if self.is_must:
-            self.open_home2()
-            return
-        if self.play_specify_video():
-            return
-        logger.info(f"{self.user_data_dir}进行选修学习")
+        logger.info(f"{self.user_data_dir}进行学习")
         logger.info(
             f"{self.user_data_dir}打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
-        url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
+        url = "https://gp.chinahrt.com/index.html#/v_trainplan_list"
         self.driver.get(url)
-        # 切换左侧标签
-        # 等待10秒，检查是否存在同时有两个类名的元素
-        try:
-            title = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//div[@title='" + self.video_name[self.current_video_url_index] + "']"))
-            )
-            title.click()
-            time.sleep(5)
-        except Exception as e:
-            logger.error(f"检测首页异常，进行重试")
-            time.sleep(10)
-            threading.Thread(target=self.open_home, daemon=True).start()
-            return
-        is_next_page = self.judge_is_next_page()
-        while is_next_page:
-            # 当存在class：ivu-page-next ivu-page-disabled说明没有下一页了
-            # 首先检查是否存在同时包含两个类名的元素
-            try:
-                # 等待10秒，检查是否存在同时有两个类名的元素
-                WebDriverWait(self.driver, 5).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, ".ivu-page-next.ivu-page-disabled"))
-                )
-                logger.info("存在 class 为 'ivu-page-next ivu-page-disabled' 的元素")
-                self.current_video_url_index = self.current_video_url_index + 1
-                threading.Thread(target=self.open_home, daemon=True).start()
-                break
-            except TimeoutException:
-                # 如果不存在，检查是否只存在"ivu-page-next"类的元素
-                try:
-                    element = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
-                    )
-                    logger.info(f"{self.user_data_dir}存在 class 为 'ivu-page-next' 的元素")
-                    element.click()
-                    time.sleep(2)
-                    is_next_page = self.judge_is_next_page()
-                except Exception as e:
-                    logger.error(f"{self.user_data_dir}两个类名的元素都不存在")
-
-            except Exception as e:
-                logger.error(f"翻页操作失败: {str(e)}")
-                break
+        # # 切换左侧标签
+        # # 等待10秒，检查是否存在同时有两个类名的元素
+        # try:
+        #     title = WebDriverWait(self.driver, 10).until(
+        #         EC.presence_of_element_located(
+        #             (By.XPATH, "//div[@title='" + self.video_name[self.current_video_url_index] + "']"))
+        #     )
+        #     title.click()
+        #     time.sleep(5)
+        # except Exception as e:
+        #     logger.error(f"检测首页异常，进行重试")
+        #     time.sleep(10)
+        #     threading.Thread(target=self.open_home, daemon=True).start()
+        #     return
+        # is_next_page = self.judge_is_next_page()
+        # while is_next_page:
+        #     # 当存在class：ivu-page-next ivu-page-disabled说明没有下一页了
+        #     # 首先检查是否存在同时包含两个类名的元素
+        #     try:
+        #         # 等待10秒，检查是否存在同时有两个类名的元素
+        #         WebDriverWait(self.driver, 5).until(
+        #             EC.presence_of_element_located((By.CSS_SELECTOR, ".ivu-page-next.ivu-page-disabled"))
+        #         )
+        #         logger.info("存在 class 为 'ivu-page-next ivu-page-disabled' 的元素")
+        #         self.current_video_url_index = self.current_video_url_index + 1
+        #         threading.Thread(target=self.open_home, daemon=True).start()
+        #         break
+        #     except TimeoutException:
+        #         # 如果不存在，检查是否只存在"ivu-page-next"类的元素
+        #         try:
+        #             element = WebDriverWait(self.driver, 10).until(
+        #                 EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
+        #             )
+        #             logger.info(f"{self.user_data_dir}存在 class 为 'ivu-page-next' 的元素")
+        #             element.click()
+        #             time.sleep(2)
+        #             is_next_page = self.judge_is_next_page()
+        #         except Exception as e:
+        #             logger.error(f"{self.user_data_dir}两个类名的元素都不存在")
+        #
+        #     except Exception as e:
+        #         logger.error(f"翻页操作失败: {str(e)}")
+        #         break
 
     def open_home2(self):
         try:
@@ -738,57 +744,132 @@ class TeacherTrainingChecker:
 
     def is_login(self):
         while True:
-            self.driver.get("https://web.scgb.gov.cn/#/index")
+            self.driver.get("https://gp.chinahrt.com/index.html#/v_user_set")
             time.sleep(2)
             # 检查登录状态
-            store = self.get_local_storage_value("store")
-            if store:
-                try:
-                    store_json = json.loads(store)
-                    if "accessToken" in store_json['session']:
-                        self.headers['Authorization'] = "Bearer " + store_json['session']['accessToken']
-                        logger.info(f"已登录:{store_json['session']['nickName']}【{store_json['session']['organName']}】")
-                        return store_json
-                    else:
-                        logger.warning("未登录，请登录")
-                except json.JSONDecodeError:
-                    logger.error("localStorage中store数据格式错误")
+            jwtToken = self.get_session_storage_value("jwtToken")
+
+            if jwtToken:
+                realName = self.get_session_storage_value("realName")
+                orgName = self.get_session_storage_value("orgName")
+                self.headers['hrttoken'] = jwtToken
+                logger.info(f"已登录:{realName}【{orgName}】")
+                return
             else:
-                logger.warning("未登录，请登录")
+                logger.warning(f"{self.user_data_dir}未登录，请登录")
             self.auto_login()
-            time.sleep(5)
+            time.sleep(10)
+
+    def get_element_in_iframe(self, iframe_locator, element_locator):
+        """
+        在iframe中获取元素
+        :param iframe_locator: iframe的定位器 (例如(By.ID, 'iframe_id'))
+        :param element_locator: 要查找的元素的定位器
+        :return: 找到的元素或None
+        """
+        try:
+            # 切换到iframe
+            self.driver.switch_to.frame(self.driver.find_element(*iframe_locator))
+
+            # 在iframe中查找元素
+            element = self.driver.find_element(*element_locator)
+            return element
+
+        except Exception as e:
+            logger.error(f"在iframe中获取元素失败: {str(e)}")
+            return None
+        finally:
+            # 切回主文档，避免影响后续操作
+            self.driver.switch_to.default_content()
+
+    def login_through_iframe(self):
+        """
+        通过指定XPath的iframe进行登录操作
+        :param username: 登录用户名
+        :param password: 登录密码
+        :return: 是否登录成功
+        """
+        try:
+            # 定位iframe元素
+            iframe_xpath = '//div[@class="login-box"]/iframe'
+            iframe_element = self.driver.find_element(By.XPATH, iframe_xpath)
+
+            # 切换到iframe上下文
+            self.driver.switch_to.frame(iframe_element)
+            logger.info("成功切换到目标iframe")
+
+            # 在iframe中定位用户名输入框并输入
+            # 注意：这里的XPath需要根据实际页面调整
+            username_input = self.driver.find_element(By.XPATH, '//input[@placeholder="账号"]')
+            username_input.clear()
+            username_input.send_keys(self.username)
+
+            # 在iframe中定位密码输入框并输入
+            password_input = self.driver.find_element(By.XPATH, '//input[@name="密码"]')
+            password_input.clear()
+            password_input.send_keys(self.password)
+
+            # 点击登录按钮
+            login_button = self.driver.find_element(By.XPATH, '//button[@type="submit" or text()="登录"]')
+            login_button.click()
+            logger.info("登录信息已提交")
+
+            # 等待登录操作完成（可根据实际情况调整等待时间）
+            time.sleep(2)
+            return True
+
+        except NoSuchElementException as e:
+            logger.error(f"未找到元素: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"登录过程出错: {str(e)}")
+            return False
+        finally:
+            # 无论成功失败，都切回主文档
+            self.driver.switch_to.default_content()
+            logger.info("已切换回主文档")
 
     def auto_login(self):
         try:
             logger.info(f"{self.user_data_dir}开始自动登录")
+            self.driver.get("http://meishan.scjxjypx.com/")
+            time.sleep(5)
+
+            # 定位iframe元素
+            iframe_xpath = '//div[@class="login-box"]/iframe'
+            iframe_element = self.driver.find_element(By.XPATH, iframe_xpath)
+
+            # 切换到iframe上下文
+            self.driver.switch_to.frame(iframe_element)
+            logger.info("成功切换到目标iframe")
             # 输入用户名
             username_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="请输入您的用户名"]'))
+                EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="账号"]'))
             )
+
             username_input.clear()
             username_input.send_keys(self.username)
 
             # 输入密码
             password_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="请输入您的密码"]'))
+                EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="密码"]'))
             )
-            logger.info("找到密码输入框")
             password_input.clear()
             password_input.send_keys(self.password)
 
             # # 处理验证码
             capture_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="请输入验证码"]'))
+                EC.element_to_be_clickable((By.XPATH, '//input[@placeholder="验证码"]'))
             )
             capture_input.clear()
             captcha = self.get_formdata_img_src()
             capture_input.send_keys(captcha)
             # 点击登录按钮
             login_button = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//div[@class="ivu-form-item-content"]//button'))
+                EC.element_to_be_clickable(
+                    (By.XPATH, '//button[@class="el-button logbtn cb mt5 el-button--default el-button--small"]'))
             )
             login_button.click()
-            # 判断是的为第一次登录，修改登录密码
         except TimeoutException:
             logger.error("超时未找到登录相关输入框")
         except ElementNotInteractableException:
@@ -801,7 +882,7 @@ class TeacherTrainingChecker:
         try:
             # 等待验证码图片容器加载
             formdata_div = WebDriverWait(self.driver, wait_time).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "validate-form-img"))
+                EC.presence_of_element_located((By.XPATH, '//img[@alt="验证码"]'))
             )
             logger.info("找到验证码图片容器")
             save_path = "png/" + self.username + ".png"  # 保存路径可自定义
@@ -825,9 +906,9 @@ class TeacherTrainingChecker:
         self.init_browser()
         # 判断用户是否登录
         self.is_login()
-        self.check_study_time2()
+        # self.check_study_time2()
         self.open_home()
-        threading.Thread(target=self.check_course_success, daemon=True).start()
+        # threading.Thread(target=self.check_course_success, daemon=True).start()
         while self.is_running:
             time.sleep(1)
         logger.info(f"{self.user_data_dir}视频已全部播放完成")
@@ -850,4 +931,4 @@ def exec_task():
 
 if __name__ == '__main__':
     continue_task()
-    app.run(host='0.0.0.0', port=5002)
+    app.run(host='0.0.0.0', port=7002)

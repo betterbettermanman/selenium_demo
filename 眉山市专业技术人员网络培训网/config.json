@@ -1,9 +1,9 @@
 [
   {
-    "name": "徐思源",
-    "username": "13679644177",
-    "password": "Abcd1234@",
-    "is_head": 1,
+    "name": "周婷",
+    "username": "513821199508129083",
+    "password": "zt1219089650",
+    "is_head": 0,
     "start_index": 2,
     "no_play_videos": [],
     "status": "1",
@@ -11,104 +11,5 @@
     "electivePeriod": "30.1",
     "created_at": "",
     "updated_at": "2025-07-31 15:14:07"
-  },
-  {
-    "name": "曾艳",
-    "username": "13618045535",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [],
-    "status": "2",
-    "requiredPeriod": "20.0",
-    "electivePeriod": "30.0",
-    "created_at": "",
-    "updated_at": "2025-07-31 13:15:14"
-  },
-  {
-    "name": "刘欣",
-    "username": "15775960726",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [
-      "018a4064-6b43-7b9b-bcf0-aa39670a5cdb"
-    ],
-    "status": 1,
-    "requiredPeriod": "16.6",
-    "electivePeriod": "30.0",
-    "created_at": "",
-    "updated_at": "2025-07-31 14:59:12"
-  },
-  {
-    "name": "王丽华",
-    "username": "15183330971",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [
-      "018a4062-5d02-76f8-829e-31d55a8ce867"
-    ],
-    "status": 1,
-    "requiredPeriod": "11.2",
-    "electivePeriod": "30.9",
-    "created_at": "",
-    "updated_at": "2025-07-31 15:19:26"
-  },
-  {
-    "name": "杨敏",
-    "username": "13678212435",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [],
-    "status": 1,
-    "requiredPeriod": "4.8",
-    "electivePeriod": "26.5",
-    "created_at": "",
-    "updated_at": "2025-07-31 15:30:44"
-  },
-  {
-    "name": "彭露",
-    "username": "13778887730",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [],
-    "status": 1,
-    "requiredPeriod": "7.7",
-    "electivePeriod": "30.4",
-    "created_at": "",
-    "updated_at": "2025-07-31 14:41:19"
-  },
-  {
-    "name": "刘丽英",
-    "username": "13980370361",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [
-      "018a4062-998e-740f-a149-20c5165a8c4d"
-    ],
-    "status": 1,
-    "requiredPeriod": "11.9",
-    "electivePeriod": "30.6",
-    "created_at": "",
-    "updated_at": "2025-07-31 15:36:33"
-  },
-  {
-    "name": "杨镜榕",
-    "username": "15700368576",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 1,
-    "no_play_videos": [
-      "018a4062-5d02-76f8-829e-31d55a8ce867"
-    ],
-    "status": 1,
-    "requiredPeriod": "9.5",
-    "electivePeriod": "30.8",
-    "created_at": "",
-    "updated_at": "2025-07-31 15:21:29"
   }
 ]

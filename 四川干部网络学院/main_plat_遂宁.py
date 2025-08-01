@@ -540,7 +540,7 @@ class TeacherTrainingChecker:
 
     def check_study_time2(self):
         logger.info(f"{self.user_data_dir}判断当前学习任务选修和必修是否完成")
-        url = "https://api.scgb.gov.cn/api/services/app/class/app/getClassDetailByUserId?classId=019815fe-ec44-753d-9b1d-554f017df106"
+        url = "https://api.scgb.gov.cn/api/services/app/class/app/getClassDetailByUserId?classId=0197beca-df9e-7a23-9b84-eb2bb4c43ecf"
         try:
             response = requests.get(url=url, headers=self.headers)
             response_json = response.json()
@@ -588,6 +588,9 @@ class TeacherTrainingChecker:
                 try:
                     # 获取a标签的链接和文本
                     a_href = a_tag.get_attribute("href")
+                    # 检查cursor_id是否为目标值（这里假设目标值是"special_cursor_id"）
+                    if parse_courseid_by_regex(a_href) in self.no_play_videos:
+                        continue
                     # 检查当前a标签内是否存在class为"status success"的div
                     a_tag.find_element(By.XPATH, ".//div[@class='status success']")
                     # logger.info(f"第{index}个a标签：视频播放完成")
