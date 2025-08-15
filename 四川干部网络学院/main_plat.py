@@ -76,7 +76,7 @@ def read_json_config(config_path):
         return None
 
 
-config_path = "play_result.json"
+config_path = "config.json"
 play_result_data = read_json_config(config_path)
 
 
@@ -553,7 +553,7 @@ class TeacherTrainingChecker:
         try:
             response = requests.get(url=url, headers=self.headers)
             response_json = response.json()
-            logger.info(f"{self.user_data_dir}学习进度详情：{response_json}")
+            # logger.info(f"{self.user_data_dir}学习进度详情：{response_json}")
             self.send_check_result(str(round(int(response_json['result']['requiredPeriod']) / 3600, 1)),
                                    str(round(int(response_json['result']['electivePeriod']) / 3600, 1)))
             # 判断选修
@@ -577,7 +577,8 @@ class TeacherTrainingChecker:
 
     def send_check_result(self, requiredPeriod, electivePeriod, mentioned_list=None, mentioned_mobile_list=None):
         update_data(self.username, requiredPeriod=requiredPeriod, electivePeriod=electivePeriod)
-        content = self.user_data_dir + "：必修:" + requiredPeriod + ";选修:" + electivePeriod
+        content = self.user_data_dir + "学习进度：必修:" + requiredPeriod + ";选修:" + electivePeriod
+        logger.info(content)
         data = {
             "msgtype": "text",
             "text": {
@@ -606,15 +607,15 @@ class TeacherTrainingChecker:
         call_login = False
         while self.is_running:
             if self.error_cursor_id_num == 2:
-                logger.info(f"{self.user_data_dir}错误播放超过数超过6次，将当前课程放入不播放列表")
+                logger.error(f"{self.user_data_dir}错误播放超过数超过6次，将当前课程放入不播放列表")
                 update_data(self.username, cursor_id=self.error_cursor_id)
                 self.current_course_id = ""
                 self.error_cursor_id_num = 0
                 threading.Thread(target=self.open_home, daemon=True).start()
                 time.sleep(10)
                 continue
-            if self.sleep_time_num == 3:
-                logger.info(f"{self.user_data_dir}睡眠重复次数超过3次，重新打开页面")
+            if self.sleep_time_num == 1:
+                logger.error(f"{self.user_data_dir}睡眠重复次数超过3次，重新打开页面")
                 self.is_login()
                 logger.info(f"{self.user_data_dir}记录错误课程重试次数")
                 if self.error_cursor_id == self.current_course_id:
@@ -624,70 +625,74 @@ class TeacherTrainingChecker:
                     self.error_cursor_id_num = 0
                 logger.info(
                     f"{self.user_data_dir}error_cursor_id:{self.error_cursor_id},error_cursor_id_num:{self.error_cursor_id_num}")
-
                 self.current_course_id = ""
                 self.sleep_time_num = 0
                 threading.Thread(target=self.open_home, daemon=True).start()
-
+                time.sleep(10)
+                continue
+            if not self.current_course_id:
+                logger.info(f"{self.user_data_dir}课程id为空，间隔10秒，继续检测")
                 time.sleep(10)
                 continue
             check_play_success_url = "https://api.scgb.gov.cn/api/services/app/course/app/getCourseDetailByUserId?"
             logger.info(f"{self.user_data_dir}检测课程id: {self.current_course_id}")
-            if self.current_course_id != "":
-                payload = {
-                    "courseId": self.current_course_id
-                }
-                try:
-                    course_detail = requests.post(check_play_success_url, headers=self.headers,
-                                                  json=payload)
-                    detail_json = course_detail.json()["result"]
-                    logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
-                    if detail_json["totalPeriod"] == detail_json["watchTimes"]:
-                        if self.check_study_time2():
-                            # 播放下一个视频
-                            logger.info(
-                                f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
-                            threading.Thread(target=self.open_home, daemon=True).start()
-                            self.current_course_id = ""
-                            sleep_time = 60
-                        else:
-                            logger.info("已全部观看完成，退出程序")
-                            self.is_running = False
-                            break
+            payload = {"courseId": self.current_course_id}
+            try:
+                course_detail = requests.post(check_play_success_url, headers=self.headers, json=payload)
+                detail_json = course_detail.json()["result"]
+                # logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
+                if detail_json["totalPeriod"] == detail_json["watchTimes"]:
+                    if self.check_study_time2():
+                        # 播放下一个视频
+                        logger.info(
+                            f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
+                        self.current_course_id = ""
+                        threading.Thread(target=self.open_home, daemon=True).start()
+                        sleep_time=40
                     else:
-                        logger.info(f"{self.user_data_dir}的【{self.current_course_id}】未观看完成")
-                        if not call_login:
-                            logger.info(
-                                f"{self.user_data_dir}totalPeriod: {detail_json['totalPeriod']}, watchTimes: {detail_json['watchTimes']}")
-                            sleep_time = (int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"]))
-                            # 间隔时间最小30秒，最大为：10分钟-20分钟以内的随机值
-                            if sleep_time < 30:
-                                sleep_time = 30
-                            if sleep_time > 600:
-                                sleep_time = random.randint(600, 1200)
+                        logger.info("已全部观看完成，退出程序")
+                        self.is_running = False
+                        break
+                else:
+                    logger.info(f"{self.user_data_dir}的【{self.current_course_id}】未观看完成")
+                    if not call_login:
+                        total_period = detail_json['totalPeriod']
+                        watch_times = detail_json['watchTimes']
+                        logger.info(f"{self.user_data_dir}totalPeriod: {total_period}, watchTimes: {watch_times}")
+                        sleep_time = (int(total_period) - int(watch_times))
+                        # 间隔时间最小30秒，最大为：10分钟-20分钟以内的随机值
+                        if sleep_time < 30:
+                            sleep_time = 30
+                        logger.debug("记录睡眠值，以及重复次数")
+                        if self.sleep_time == sleep_time:
+                            self.sleep_time_num = self.sleep_time_num + 1
                         else:
-                            logger.info("重新登录，重新打开页面")
-                            threading.Thread(target=self.open_home, daemon=True).start()
-                            self.current_course_id = ""
-                    call_login = False
-                except TimeoutException:
-                    logger.error("链接超时")
-                    continue
-                except Exception as e:
-                    logger.error(f"{self.user_data_dir}检测课程状态失败: {str(e)}，可能登陆失效，进行登录检测")
-                    self.is_login()
-                    call_login = True
-                    sleep_time = 20
-            else:
+                            self.sleep_time = sleep_time
+                            self.sleep_time_num = 0
+                    else:
+                        logger.info(f"{self.user_data_dir}重新登录，重新打开页面")
+                        self.current_course_id = ""
+                        threading.Thread(target=self.open_home, daemon=True).start()
+                        sleep_time = 30
+                call_login = False
+            except TimeoutException:
+                logger.error("链接超时")
                 sleep_time = 10
-            logger.debug("记录睡眠值，以及重复次数")
-            if self.sleep_time == sleep_time:
-                self.sleep_time_num = self.sleep_time_num + 1
+            except Exception as e:
+                logger.error(f"{self.user_data_dir}检测课程状态失败: {str(e)}，可能登陆失效，进行登录检测")
+                self.is_login()
+                call_login = True
+                sleep_time=20
 
-            else:
-                self.sleep_time = sleep_time
-                self.sleep_time_num = 0
+            self.sleep(sleep_time)
 
+    def sleep(self, sleep_time):
+        # 超过600秒间隔，进行随机
+        if sleep_time > 1800:
+            rd = random.randint(1200, 1800)
+            logger.info(f"{self.user_data_dir}间隔{rd}秒，继续检测")
+            time.sleep(rd)
+        else:
             logger.info(f"{self.user_data_dir}间隔{sleep_time}秒，继续检测")
             time.sleep(sleep_time)
 

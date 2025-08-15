@@ -537,6 +537,9 @@ def check_login():
 
     driver.close()
 
+def auto_login():
+    driver.get("https://auth.smartedu.cn/uias/login")
+
 
 # 需要修改的地方
 CHROMEDRIVER_PATH = "chromedriver.exe"
@@ -567,7 +570,7 @@ target_courses = [
     },
 ]
 
-user_data_dir = "18783363361"
+user_data_dir = "18080395300"
 password = "Zhying0521"
 
 if __name__ == "__main__":
