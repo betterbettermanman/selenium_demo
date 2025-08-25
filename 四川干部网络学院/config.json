@@ -1,57 +1,59 @@
 [
   {
-    "name": "廖秀珍",
-    "username": "15283778913",
+    "name": "杜苑嘉",
+    "username": "18328423217",
     "password": "Abcd1234",
     "is_head": 1,
-    "start_index": 1,
+    "start_index": 0,
     "no_play_videos": [
-      "0195b283-58ad-74dc-8ee2-d243fe6acbd8",
-      "018a405a-10fa-762b-8f61-a99c8ed578f4",
-      "01920eaf-3a44-7b60-8ba0-ff88b6b207be",
-      "0192233b-df28-7037-be51-369d1af43b1f",
-      "018a4062-998e-740f-a149-20c5165a8c4d"
+      "0194fe7c-2897-7da6-856f-cc2dedbd7a10",
+      "0195b282-d630-7558-a20c-bc433825e34a"
     ],
     "status": "1",
-    "requiredPeriod": "14.7",
-    "electivePeriod": "31.5",
+    "requiredPeriod": "1.4",
+    "electivePeriod": "20.4",
     "created_at": "",
-    "updated_at": "2025-08-15 10:33:03"
+    "updated_at": "2025-08-25 13:40:27"
   },
   {
-    "name": "冯建",
-    "username": "19911862086",
-    "password": "622622waa#",
+    "name": "刘静",
+    "username": "17798250434",
+    "password": "1998919Lj@",
     "is_head": 1,
     "start_index": 0,
     "no_play_videos": [
-      "01920e2d-014f-7c43-801b-c13151231f0f",
-      "0195b26c-92e4-741c-abaa-4317ea176d87",
-      "0195b264-6bb5-71bc-adcc-e1aa699a8c14",
-      "018f7f45-fd68-7e50-8bf6-ee10b29fb970",
-      "018bd5ec-5b45-7f80-b19f-daf9cbf039cf",
-      "018a4044-7b5c-7dcc-beee-c66cf879144b"
+      "0194fe73-0573-7a70-bf01-c3e7ecf7b888"
     ],
     "status": "1",
-    "requiredPeriod": "16.5",
-    "electivePeriod": "25.4",
+    "requiredPeriod": "0.0",
+    "electivePeriod": "10.0",
     "created_at": "",
-    "updated_at": "2025-08-15 10:43:30"
+    "updated_at": "2025-08-25 13:19:39"
   },
   {
-    "name": "邓蝶",
-    "username": "13320633360",
-    "password": "deng147@",
+    "name": "曲慧芳",
+    "username": "18383324570",
+    "password": "Abcd1234",
     "is_head": 1,
     "start_index": 0,
-    "no_play_videos": [
-      "0195b26d-3194-75fb-9aa9-3b94abe4e45b",
-      "01917e04-3ed9-7779-9cd4-1e7c3e86a8cf"
-    ],
+    "no_play_videos": [],
     "status": "1",
-    "requiredPeriod": "0.5",
-    "electivePeriod": "15.9",
+    "requiredPeriod": "0.0",
+    "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-08-15 10:39:58"
+    "updated_at": "2025-08-25 13:20:22"
+  },
+  {
+    "name": "邓冬梅",
+    "username": "18383367196",
+    "password": "Abcd1234",
+    "is_head": 1,
+    "start_index": 0,
+    "no_play_videos": [],
+    "status": "1",
+    "requiredPeriod": "0.0",
+    "electivePeriod": "0.0",
+    "created_at": "",
+    "updated_at": "2025-08-25 13:20:22"
   }
 ]

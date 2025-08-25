@@ -340,7 +340,6 @@ class TeacherTrainingChecker:
         return False
 
     def open_home(self):
-        time.sleep(10000)
         if self.is_complete:
             return
         logger.info(f"{self.user_data_dir}进行学习")
@@ -348,6 +347,7 @@ class TeacherTrainingChecker:
             f"{self.user_data_dir}打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
         url = "https://gp.chinahrt.com/index.html#/v_trainplan_list"
         self.driver.get(url)
+        time.sleep(10000)
         # # 切换左侧标签
         # # 等待10秒，检查是否存在同时有两个类名的元素
         # try:

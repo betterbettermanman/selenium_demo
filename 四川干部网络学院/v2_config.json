@@ -1,0 +1,27 @@
+[
+  {
+    "name": "赵丽丽",
+    "username": "18016198151",
+    "password": "Abcd1234",
+    "is_head": 1,
+    "start_index": 0,
+    "no_play_videos": [
+      "01920e2d-014f-7c43-801b-c13151231f0f",
+      "019226d6-ebca-73d2-b37c-d531db197870",
+      "018b609e-d7fd-71ea-afa0-e1de3e2f2670",
+      "018b6af1-e7de-7bdd-968d-74c2eda90121"
+    ],
+    "courses": [
+      {
+        "name": "习近平新时代中国特色社会主义思想概论",
+        "teacher": "杨继荣",
+        "status": "0"
+      }
+    ],
+    "status": "2",
+    "requiredPeriod": "21.9",
+    "electivePeriod": "30.5",
+    "created_at": "",
+    "updated_at": "2025-08-25 10:50:00"
+  }
+]
