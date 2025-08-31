@@ -347,50 +347,47 @@ class TeacherTrainingChecker:
             f"{self.user_data_dir}打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
         url = "https://gp.chinahrt.com/index.html#/v_trainplan_list"
         self.driver.get(url)
-        time.sleep(10000)
-        # # 切换左侧标签
-        # # 等待10秒，检查是否存在同时有两个类名的元素
-        # try:
-        #     title = WebDriverWait(self.driver, 10).until(
-        #         EC.presence_of_element_located(
-        #             (By.XPATH, "//div[@title='" + self.video_name[self.current_video_url_index] + "']"))
-        #     )
-        #     title.click()
-        #     time.sleep(5)
-        # except Exception as e:
-        #     logger.error(f"检测首页异常，进行重试")
-        #     time.sleep(10)
-        #     threading.Thread(target=self.open_home, daemon=True).start()
-        #     return
-        # is_next_page = self.judge_is_next_page()
-        # while is_next_page:
-        #     # 当存在class：ivu-page-next ivu-page-disabled说明没有下一页了
-        #     # 首先检查是否存在同时包含两个类名的元素
-        #     try:
-        #         # 等待10秒，检查是否存在同时有两个类名的元素
-        #         WebDriverWait(self.driver, 5).until(
-        #             EC.presence_of_element_located((By.CSS_SELECTOR, ".ivu-page-next.ivu-page-disabled"))
-        #         )
-        #         logger.info("存在 class 为 'ivu-page-next ivu-page-disabled' 的元素")
-        #         self.current_video_url_index = self.current_video_url_index + 1
-        #         threading.Thread(target=self.open_home, daemon=True).start()
-        #         break
-        #     except TimeoutException:
-        #         # 如果不存在，检查是否只存在"ivu-page-next"类的元素
-        #         try:
-        #             element = WebDriverWait(self.driver, 10).until(
-        #                 EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
-        #             )
-        #             logger.info(f"{self.user_data_dir}存在 class 为 'ivu-page-next' 的元素")
-        #             element.click()
-        #             time.sleep(2)
-        #             is_next_page = self.judge_is_next_page()
-        #         except Exception as e:
-        #             logger.error(f"{self.user_data_dir}两个类名的元素都不存在")
-        #
-        #     except Exception as e:
-        #         logger.error(f"翻页操作失败: {str(e)}")
-        #         break
+        time.sleep(5)
+        logger.info("获取列表第一个的视频进度和考试进度")
+        # 获取该div下所有的span元素
+        parent_elements = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".fl.ml30"))
+        )
+
+        # 存储所有找到的dt元素
+        sss = "眉山市2025年度专业技术人员继续教育公需科目"
+        current_course = ""
+        # 遍历每个父元素，查找其下的所有dt标签
+        for parent in parent_elements:
+            course_div = parent.find_element(By.CLASS_NAME, "course-title")
+            # 在div内部查找所有span标签
+            span_elements = course_div.find_elements(By.TAG_NAME, "span")
+
+            # 提取所有span标签的文本值
+            span_values = [span.text for span in span_elements]
+
+            # 打印结果
+            print("所有span标签的值：")
+            is_return = False
+            for value in span_values:
+                print(value)
+                if value == sss:
+                    current_course = parent
+                    is_return = True
+            if is_return:
+                break
+        # 开始判断是否完成课程
+        column_wrap = current_course.find_element(By.CLASS_NAME, "column-wrap")
+        video_process = column_wrap.find_elements(By.CLASS_NAME, "el-progress__text")
+        # 如果不为已学100%，找到去学习按钮，进行学习
+        if "已学100%" != video_process[0].text:
+            learn_elements = column_wrap.find_element(By.XPATH,".//button[.//text()='去学习' or .= '去学习']")
+            learn_elements.click()
+        # 如果不为已考100%，找到去考试按钮，进行考试
+        if "已考100%" != video_process[1].text:
+            learn_elements = column_wrap.find_element(By.XPATH,".//button[.//text()='去考试' or .= '去考试']")
+            learn_elements.click()
+        logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
 
     def open_home2(self):
         try:

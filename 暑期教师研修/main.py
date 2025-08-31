@@ -51,7 +51,7 @@ class TeacherTrainingChecker:
             start_time = time.time()
             self.driver.get(self.base_url)
             logging.info(f"成功打开网页: {self.driver.title}")
-            time.sleep(5)  # 等待页面加载
+            time.sleep(10)  # 等待页面加载
             # 解析页面并更新课程状态
             self._parse_page_elements()
             for course in self.target_courses:

@@ -1,36 +1,5 @@
 [
   {
-    "name": "杜苑嘉",
-    "username": "18328423217",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 0,
-    "no_play_videos": [
-      "0194fe7c-2897-7da6-856f-cc2dedbd7a10",
-      "0195b282-d630-7558-a20c-bc433825e34a"
-    ],
-    "status": "1",
-    "requiredPeriod": "1.4",
-    "electivePeriod": "20.4",
-    "created_at": "",
-    "updated_at": "2025-08-25 13:40:27"
-  },
-  {
-    "name": "刘静",
-    "username": "17798250434",
-    "password": "1998919Lj@",
-    "is_head": 1,
-    "start_index": 0,
-    "no_play_videos": [
-      "0194fe73-0573-7a70-bf01-c3e7ecf7b888"
-    ],
-    "status": "1",
-    "requiredPeriod": "0.0",
-    "electivePeriod": "10.0",
-    "created_at": "",
-    "updated_at": "2025-08-25 13:19:39"
-  },
-  {
     "name": "曲慧芳",
     "username": "18383324570",
     "password": "Abcd1234",
@@ -38,22 +7,9 @@
     "start_index": 0,
     "no_play_videos": [],
     "status": "1",
-    "requiredPeriod": "0.0",
-    "electivePeriod": "0.0",
+    "requiredPeriod": "4.2",
+    "electivePeriod": "17.4",
     "created_at": "",
-    "updated_at": "2025-08-25 13:20:22"
-  },
-  {
-    "name": "邓冬梅",
-    "username": "18383367196",
-    "password": "Abcd1234",
-    "is_head": 1,
-    "start_index": 0,
-    "no_play_videos": [],
-    "status": "1",
-    "requiredPeriod": "0.0",
-    "electivePeriod": "0.0",
-    "created_at": "",
-    "updated_at": "2025-08-25 13:20:22"
+    "updated_at": "2025-08-27 13:19:53"
   }
 ]
