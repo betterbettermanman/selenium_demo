@@ -1,34 +1,18 @@
 [
   {
-    "name": "曲慧芳",
-    "username": "18383324570",
-    "password": "Abcd1234",
-    "is_head": 0,
-    "start_index": 0,
-    "no_play_videos": [
-      "019226d6-ebca-73d2-b37c-d531db197870",
-      "018f7a1a-c9fa-704e-8e0d-80a3aa4347fb"
-    ],
-    "status": "1",
-    "requiredPeriod": "51.7",
-    "electivePeriod": "30.0",
-    "created_at": "",
-    "updated_at": "2025-09-01 16:34:04"
-  },
-  {
     "name": "方丽",
     "username": "19911899337",
     "password": "Abcd1234",
-    "is_head": 0,
+    "is_head": 1,
     "start_index": 0,
     "no_play_videos": [
       "018b6aef-747b-7461-a800-4b2cb34b2b40"
     ],
-    "status": "2",
+    "status": "1",
     "requiredPeriod": "1.3",
-    "electivePeriod": "17.9",
+    "electivePeriod": "22.4",
     "created_at": "",
-    "updated_at": "2025-09-01 01:00:38"
+    "updated_at": "2025-09-01 16:51:10"
   },
   {
     "name": "肖曼",
@@ -37,11 +21,11 @@
     "is_head": 1,
     "start_index": 0,
     "no_play_videos": [],
-    "status": "2",
+    "status": "1",
     "requiredPeriod": "2.9",
-    "electivePeriod": "8.1",
+    "electivePeriod": "12.7",
     "created_at": "",
-    "updated_at": "2025-09-01 01:00:48"
+    "updated_at": "2025-09-01 16:51:20"
   },
   {
     "name": "杨舒晴",
@@ -52,10 +36,10 @@
     "no_play_videos": [
       "01920e2d-014f-7c43-801b-c13151231f0f"
     ],
-    "status": "2",
+    "status": "1",
     "requiredPeriod": "0.0",
-    "electivePeriod": "10.4",
+    "electivePeriod": "15.0",
     "created_at": "",
-    "updated_at": "2025-09-01 01:00:58"
+    "updated_at": "2025-09-01 16:51:29"
   }
 ]
