@@ -1,61 +1,56 @@
 [
   {
-    "name": "曲慧芳",
-    "username": "18383324570",
+    "name": "杨舒晴222",
+    "username": "13699688282",
     "password": "Abcd1234",
     "is_head": 0,
     "start_index": 0,
     "no_play_videos": [
-      "019226d6-ebca-73d2-b37c-d531db197870",
-      "018f7a1a-c9fa-704e-8e0d-80a3aa4347fb"
+      "0196804a-b47b-79da-bb6a-8a2b406bed88"
     ],
     "status": "1",
-    "requiredPeriod": "51.7",
-    "electivePeriod": "30.0",
+    "requiredPeriod": "14.4",
+    "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-01 16:34:04"
+    "updated_at": "2025-09-03 09:02:39"
   },
   {
-    "name": "方丽",
-    "username": "19911899337",
+    "name": "市公安局2",
+    "username": "13508007179",
     "password": "Abcd1234",
     "is_head": 0,
     "start_index": 0,
-    "no_play_videos": [
-      "018b6aef-747b-7461-a800-4b2cb34b2b40"
-    ],
-    "status": "2",
-    "requiredPeriod": "1.3",
-    "electivePeriod": "17.9",
+    "no_play_videos": [],
+    "status": "1",
+    "requiredPeriod": "11.2",
+    "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-01 01:00:38"
+    "updated_at": "2025-09-03 09:03:29"
   },
   {
-    "name": "肖曼",
-    "username": "18200547108",
+    "name": "市公安局3",
+    "username": "13890755577",
     "password": "Abcd1234",
-    "is_head": 1,
+    "is_head": 0,
     "start_index": 0,
     "no_play_videos": [],
-    "status": "2",
-    "requiredPeriod": "2.9",
-    "electivePeriod": "8.1",
+    "status": "1",
+    "requiredPeriod": "10.7",
+    "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-01 01:00:48"
+    "updated_at": "2025-09-03 09:04:29"
   },
   {
-    "name": "杨舒晴",
-    "username": "17780171194",
+    "name": "市公安局4",
+    "username": "15182930808",
     "password": "Abcd1234",
-    "is_head": 1,
+    "is_head": 0,
     "start_index": 0,
-    "no_play_videos": [
-      "01920e2d-014f-7c43-801b-c13151231f0f"
-    ],
-    "status": "2",
-    "requiredPeriod": "0.0",
-    "electivePeriod": "10.4",
+    "no_play_videos": [],
+    "status": "1",
+    "requiredPeriod": "11.4",
+    "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-01 01:00:58"
+    "updated_at": "2025-09-03 09:03:09"
   }
 ]
