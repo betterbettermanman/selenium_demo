@@ -1,21 +1,29 @@
 [
   {
-    "status": "1",
-    "class_id": "019815fe-ec44-753d-9b1d-554f017df106",
-    "name": "方丽",
-    "username": "19911899337",
-    "password": "Abcd1234",
-    "is_head": 0,
+    "status": "2",
+    "is_head": 1,
+    "name": "18281957963",
+    "username": "18281957963",
+    "password": "18281957963Tj@",
     "start_index": 0,
-    "no_play_videos": [
-      "018b6aef-747b-7461-a800-4b2cb34b2b40",
-      "019226d6-ebca-73d2-b37c-d531db197870",
-      "018f7f45-fd68-7e50-8bf6-ee10b29fb970",
-      "018b6af3-3065-7058-9fc8-d5318d77abb6"
-    ],
-    "requiredPeriod": "4.3",
-    "electivePeriod": "23.7",
+    "no_play_videos": [],
+    "requiredPeriod": "0.0",
+    "electivePeriod": "6.9",
     "created_at": "",
-    "updated_at": "2025-09-02 11:01:30"
-  }
+    "updated_at": "2025-09-04 02:49:22"
+  },
+  {
+    "status": "1",
+    "is_head": 1,
+    "name": "13882548146",
+    "username": "13882548146",
+    "password": "SNzsp2849090@",
+    "start_index": 0,
+    "no_play_videos": [],
+    "requiredPeriod": "5.3",
+    "electivePeriod": "7.6",
+    "created_at": "",
+    "updated_at": "2025-09-04 02:58:23"
+  },
+
 ]

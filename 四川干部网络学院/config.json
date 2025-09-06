@@ -5,52 +5,50 @@
     "password": "Abcd1234",
     "is_head": 0,
     "start_index": 0,
-    "no_play_videos": [
-      "0196804a-b47b-79da-bb6a-8a2b406bed88"
-    ],
-    "status": "1",
-    "requiredPeriod": "14.4",
+    "no_play_videos": [],
+    "status": "2",
+    "requiredPeriod": "30.7",
     "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-03 09:02:39"
+    "updated_at": "2025-09-04 14:46:15"
   },
   {
     "name": "市公安局2",
     "username": "13508007179",
     "password": "Abcd1234",
-    "is_head": 0,
+    "is_head": 1,
     "start_index": 0,
     "no_play_videos": [],
-    "status": "1",
-    "requiredPeriod": "11.2",
+    "status": "2",
+    "requiredPeriod": "30.7",
     "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-03 09:03:29"
+    "updated_at": "2025-09-04 22:14:56"
   },
   {
     "name": "市公安局3",
     "username": "13890755577",
     "password": "Abcd1234",
-    "is_head": 0,
+    "is_head": 1,
     "start_index": 0,
     "no_play_videos": [],
-    "status": "1",
-    "requiredPeriod": "10.7",
+    "status": "2",
+    "requiredPeriod": "30.4",
     "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-03 09:04:29"
+    "updated_at": "2025-09-04 22:15:10"
   },
   {
     "name": "市公安局4",
     "username": "15182930808",
     "password": "Abcd1234",
-    "is_head": 0,
+    "is_head": 1,
     "start_index": 0,
     "no_play_videos": [],
     "status": "1",
-    "requiredPeriod": "11.4",
+    "requiredPeriod": "30.0",
     "electivePeriod": "0.0",
     "created_at": "",
-    "updated_at": "2025-09-03 09:03:09"
+    "updated_at": "2025-09-04 22:15:16"
   }
 ]

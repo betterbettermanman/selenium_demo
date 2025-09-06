@@ -311,6 +311,9 @@ class TeacherTrainingChecker:
             self.open_home2()
             return
         logger.info(f"{self.user_data_dir}进行选修学习")
+        url = "https://web.scgb.gov.cn/#/personal"
+        self.driver.get(url)
+        time.sleep(2)
         logger.info(
             f"{self.user_data_dir}打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
         url = "https://web.scgb.gov.cn/#/specialColumn/course?channelId=01957f20-dacd-76d7-8883-71f375adaab5&id=0194693f-09a5-7875-a64f-1573512205c7&channelName=%E4%B8%AD%E5%9B%BD%E5%BC%8F%E7%8E%B0%E4%BB%A3%E5%8C%96%E7%90%86%E8%AE%BA%E4%BD%93%E7%B3%BB"
@@ -792,7 +795,8 @@ class TeacherTrainingChecker:
         driver = webdriver.Chrome(service=service, options=chrome_options)
         logger.info(f"{self.user_data_dir}浏览器文件夹初始化成功")
         return driver
-    def is_login(self, driver1,is_headless):
+
+    def is_login(self, driver1):
         while True:
             driver1.get("https://web.scgb.gov.cn/#/index")
             time.sleep(2)

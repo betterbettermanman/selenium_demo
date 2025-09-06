@@ -472,16 +472,16 @@ class TeacherTrainingChecker:
                 pass
             time.sleep(2)
             # 等待包含class为num-info的div元素加载完成
-            required_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((
-                    By.XPATH,
-                    "//div[text()=' 必修 ']"
-                ))
-            )
-            # 等待 class 为 'el-loading-spinner' 的元素变得不可见，最多20秒
-            WebDriverWait(self.driver, 20).until(
-                EC.invisibility_of_element_located((By.CLASS_NAME, "el-loading-spinner")))
-            required_div.click()
+            # required_div = WebDriverWait(self.driver, 10).until(
+            #     EC.presence_of_element_located((
+            #         By.XPATH,
+            #         "//div[text()=' 必修 ']"
+            #     ))
+            # )
+            # # 等待 class 为 'el-loading-spinner' 的元素变得不可见，最多20秒
+            # WebDriverWait(self.driver, 20).until(
+            #     EC.invisibility_of_element_located((By.CLASS_NAME, "el-loading-spinner")))
+            # required_div.click()
             time.sleep(5)
             is_next_page = self.judge_is_next_page2()
             while is_next_page:
@@ -534,8 +534,9 @@ class TeacherTrainingChecker:
 
                         # 记录当前所有标签页句柄（点击前）
                         handles_before_click = self.driver.window_handles
-                        #等待 class 为 'el-loading-spinner' 的元素变得不可见，最多20秒
-                        WebDriverWait(self.driver, 20).until(EC.invisibility_of_element_located((By.CSS_SELECTOR, "div.el-loading-mask.is-fullscreen")))
+                        # 等待 class 为 'el-loading-spinner' 的元素变得不可见，最多20秒
+                        WebDriverWait(self.driver, 20).until(
+                            EC.invisibility_of_element_located((By.CSS_SELECTOR, "div.el-loading-mask.is-fullscreen")))
                         # 点击a标签打开新页面,所有点击之前判断，是否存在蒙层
                         child_div.click()
 
@@ -583,7 +584,6 @@ class TeacherTrainingChecker:
 
         logger.info(f"{self.nickName}未找到需要播放的视频，点击下一页")
         return True  # 所有视频已完成，返回True继续翻页
-
 
     def check_study_time2(self):
         logger.info(f"{self.nickName} 判断当前学习任务选修和必修是否完成")
@@ -793,6 +793,29 @@ class TeacherTrainingChecker:
         logger.info(f"{self.nickName}浏览器文件夹初始化成功")
         return driver
 
+    def init_head_browser(self):
+        logger.info(f"{self.user_data_dir}开始初始化有头浏览器文件夹")
+        # 创建保存用户数据的目录
+        user_data_dir = os.path.join(os.getcwd(), "data", self.user_data_dir)
+        os.makedirs(user_data_dir, exist_ok=True)
+        logger.debug(f"用户数据目录: {user_data_dir}")
+
+        # 设置 Chrome 浏览器选项
+        chrome_options = Options()
+        chrome_options.add_argument(f"--user-data-dir={user_data_dir}")  # 保存用户数据
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        # 指定 ChromeDriver 的路径
+        chromedriver_path = "chromedriver.exe"
+
+        # 使用 Service 类来指定驱动路径
+        service = Service(chromedriver_path)
+
+        # 初始化 Chrome 浏览器驱动
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        logger.info(f"{self.user_data_dir}浏览器文件夹初始化成功")
+        return driver
+
     def is_login(self, driver1):
         while True:
             driver1.get("https://web.scgb.gov.cn/#/index")
@@ -913,7 +936,7 @@ class TeacherTrainingChecker:
         return ""
 
     def exec_main(self):
-        driver1 = self.init_browser(isHead="0")
+        driver1 = self.init_head_browser()
         # 判断用户是否登录
         self.is_login(driver1)
         driver1.close()
