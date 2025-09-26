@@ -5,6 +5,7 @@ import re
 import sys
 import threading
 import time
+from urllib.parse import unquote
 from urllib.parse import urlparse, parse_qs
 
 import ddddocr
@@ -265,12 +266,11 @@ class TeacherTrainingChecker:
         self.headers = {
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1',
-            'X-Access-Token': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE2NDIxMTQ5MjAsInVzZXJuYW1lIjoiYWRtaW4ifQ.-HyWQh6A9y6ZmclS7ltpBu-GFb3liVk5VVj6laavOg0',
             'User-Agent': 'Apifox/1.0.0 (https://apifox.com)',
             'Accept': '*/*',
-            'Host': 'www.cdjxjy.com',
+            'Host': 'gp.chinahrt.com',
             'Connection': 'keep-alive',
-            "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJPcmdhbklkIjoiMDE5ODMxMDAtZGI1Ni03MWNjLWI2NGQtNmY4NGQwYWM3MGQwIiwiQ2xpZW50VHlwZSI6IiIsIk9yZ2FuTmFtZSI6IuWvjOeJm-Wwj-WtpiIsIkFzc2Vzc1R5cGUiOjAsIlVzZXJJZCI6IjAxOTgzYzdmLTMxZWItN2I0NC1hNzRmLWZhZTRiYjliNmI3YiIsIk9yZ2FuUGF0aCI6IjJjNTUxYTczLTViNDEtMTFlZC05NTFhLTBjOWQ5MjY1MDRmMyxjMWJmNjBjNS01YjQxLTExZWQtOTUxYS0wYzlkOTI2NTA0ZjMsMDE4YTQ1YmMtZWVmNi03NzFmLTkzZGEtMzU2NDIyYzRkNTAyLGNkNGFlNWI0LTQxOTctNGUzNC1iNGVmLWNiMmVkNzg4YzNmYiwwMThjYWFhMy1lZDMzLTdkNDAtYmFhMy1iZjRlYTU3NzQ2ZTAsMDE5ODI2NDAtY2Y0YS03ZmQ1LWFiNDMtNzk4M2VmMDJiNmYwLDAxOTgzMTAwLWRiNTYtNzFjYy1iNjRkLTZmODRkMGFjNzBkMCIsImV4cCI6MTc1MzQ2MzE2MCwidXNlcm5hbWUiOiI3YTE1ZTZmNjNlYzM5YmM5In0.oQd_HlYVRr2_vC3U2DP31Vw62oYOgOLgWFD8n9KoEnI"
+            "hrttoken": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJPcmdhbklkIjoiMDE5ODMxMDAtZGI1Ni03MWNjLWI2NGQtNmY4NGQwYWM3MGQwIiwiQ2xpZW50VHlwZSI6IiIsIk9yZ2FuTmFtZSI6IuWvjOeJm-Wwj-WtpiIsIkFzc2Vzc1R5cGUiOjAsIlVzZXJJZCI6IjAxOTgzYzdmLTMxZWItN2I0NC1hNzRmLWZhZTRiYjliNmI3YiIsIk9yZ2FuUGF0aCI6IjJjNTUxYTczLTViNDEtMTFlZC05NTFhLTBjOWQ5MjY1MDRmMyxjMWJmNjBjNS01YjQxLTExZWQtOTUxYS0wYzlkOTI2NTA0ZjMsMDE4YTQ1YmMtZWVmNi03NzFmLTkzZGEtMzU2NDIyYzRkNTAyLGNkNGFlNWI0LTQxOTctNGUzNC1iNGVmLWNiMmVkNzg4YzNmYiwwMThjYWFhMy1lZDMzLTdkNDAtYmFhMy1iZjRlYTU3NzQ2ZTAsMDE5ODI2NDAtY2Y0YS03ZmQ1LWFiNDMtNzk4M2VmMDJiNmYwLDAxOTgzMTAwLWRiNTYtNzFjYy1iNjRkLTZmODRkMGFjNzBkMCIsImV4cCI6MTc1MzQ2MzE2MCwidXNlcm5hbWUiOiI3YTE1ZTZmNjNlYzM5YmM5In0.oQd_HlYVRr2_vC3U2DP31Vw62oYOgOLgWFD8n9KoEnI"
         }
         self.video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观",
                            "习近平强军思想"]
@@ -355,7 +355,7 @@ class TeacherTrainingChecker:
         )
 
         # 存储所有找到的dt元素
-        sss = "眉山市2025年度专业技术人员继续教育公需科目"
+        sss = "眉山2024年度数字经济与驱动发展"
         current_course = ""
         # 遍历每个父元素，查找其下的所有dt标签
         for parent in parent_elements:
@@ -379,7 +379,7 @@ class TeacherTrainingChecker:
         # 开始判断是否完成课程
         column_wrap = current_course.find_element(By.CLASS_NAME, "column-wrap")
         video_process = column_wrap.find_elements(By.CLASS_NAME, "el-progress__text")
-        learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='继续学习' or .= '继续学习']")
+        learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去学习' or .= '去学习']")
         learn_elements.click()
         logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
 
@@ -412,7 +412,7 @@ class TeacherTrainingChecker:
                 span_value = progress_div.find_element(By.TAG_NAME, 'span').text
 
                 logger.info(f"第{index}个li中的span值: {span_value}")
-                if span_value == "101%":
+                if span_value == "100%":
                     continue
                 logger.info(f"第{index}个li元素的文本内容: {li.text}")
                 target_div = li.find_element(By.CSS_SELECTOR, 'div')  # 可根据实际情况修改选择器
@@ -444,9 +444,11 @@ class TeacherTrainingChecker:
                 logger.info(li.text)
                 a_values = li.find_elements(By.TAG_NAME, 'a')
                 logger.info(a_values[1].text)
-                if not a_values[1].text.__contains__("已学完"):
+                if a_values[1].text.__contains__("已学完"):
                     continue
                 # 点击当前li
+                logger.info("点击课程，跳转到新的页面进行播放，并且记录课程id")
+
                 a_values[1].click()
                 break
             time.sleep(2)
@@ -462,7 +464,16 @@ class TeacherTrainingChecker:
                     break
 
             # 操作第二个新标签页（示例）
-            logger.info(f"第二个新标签页标题: {self.driver.title}")
+            # logger.info(f"第二个新标签页标题: {self.driver.title}")
+
+            # 关闭第一个新标签页
+            for window_handle in self.driver.window_handles:
+                if window_handle == first_new_window_handle:
+                    self.driver.switch_to.window(first_new_window_handle)
+                    self.driver.close()
+                    # 切换到第二个新标签页
+                    self.driver.switch_to.window(second_new_window)
+                    logger.info("已关闭第一个标签页")
 
             # 定位iframe元素
             iframe_xpath = '//div[@class="video-container"]/iframe'
@@ -475,23 +486,32 @@ class TeacherTrainingChecker:
             logger.info("成功切换到目标iframe")
             # 这里可以添加对第二个新标签页的操作 pausecenterchehhidfompc
             required_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((
+                EC.visibility_of_element_located((
                     By.XPATH,
                     '//div[starts-with(@class, "pausecenter")]'
                 ))
             )
+
             required_div.click()
-            # # 关闭第二个新标签页
-            # self.driver.close()
-            # print("已关闭第二个新标签页")
-            #
-            # # 切换回第一个新标签页
-            # self.driver.switch_to.window(first_new_window_handle)
-            # print("已切换回第一个新标签页")
-
-
+            self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "courseId")
+            self.trainplanId = self.extract_param_from_hash_url(self.driver.current_url, "trainplanId")
+            self.platformId = self.extract_param_from_hash_url(self.driver.current_url, "platformId")
+            logger.info(f"点击开始播放视频：{self.current_course_id}")
         except Exception as e:
             print(f"获取元素时发生错误: {e}")
+
+    def extract_param_from_hash_url(self, url, param_name):
+        """
+        从哈希路由URL中提取指定参数的值
+        """
+        # 匹配哈希路由后的查询参数
+        pattern = f'{param_name}=([^&]+)'
+        match = re.search(pattern, url)
+
+        if match:
+            # URL解码（处理中文等特殊字符）
+            return unquote(match.group(1))
+        return None
 
     def open_home2(self):
         try:
@@ -752,7 +772,7 @@ class TeacherTrainingChecker:
         sleep_time = 10
         call_login = False
         while self.is_running:
-            if self.sleep_time_num == 3:
+            if self.sleep_time_num == 100:
                 logger.info(f"{self.user_data_dir}睡眠重复次数超过3次，重新打开页面")
                 self.is_login()
                 threading.Thread(target=self.open_home, daemon=True).start()
@@ -760,45 +780,50 @@ class TeacherTrainingChecker:
                 self.sleep_time_num = 0
                 time.sleep(10)
                 continue
-            check_play_success_url = "https://api.scgb.gov.cn/api/services/app/course/app/getCourseDetailByUserId?"
+            check_play_success_url = "https://gp.chinahrt.com/gp6/lms/stu/course/courseDetail?"
             logger.info(f"{self.user_data_dir}检测课程id: {self.current_course_id}")
             if self.current_course_id != "":
-                payload = {
-                    "courseId": self.current_course_id
+                params = {
+                    "courseId": self.current_course_id,
+                    "trainplanId": self.trainplanId,
+                    "platformId": self.platformId,
                 }
                 try:
-                    course_detail = requests.post(check_play_success_url, headers=self.headers,
-                                                  json=payload)
-                    detail_json = course_detail.json()["result"]
-                    logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
-                    if detail_json["totalPeriod"] == detail_json["watchTimes"]:
-                        if self.check_study_time2():
-                            # 播放下一个视频
-                            logger.info(
-                                f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
-                            threading.Thread(target=self.open_home, daemon=True).start()
-                            self.current_course_id = ""
-                            sleep_time = 60
+                    course_detail = requests.get(check_play_success_url, headers=self.headers,
+                                                 params=params)
+                    # 可以打印完整的URL来验证
+                    logger.info(f"完整请求URL: {course_detail.url}")
+                    detail_json = course_detail.json()["data"]
+                    # logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
+                    if detail_json["learnPercent"] == 100:
+                        # 当前视频已播放完成，可以关闭当前窗体，然后刷新页面，播放下一个视频
+                        self.driver.close()
+                        # 获取关闭后的窗口句柄
+                        remaining_handles = self.driver.window_handles
+                        print(f"关闭后标签页数量: {len(remaining_handles)}")
+
+                        # 如果还有剩余的tab，切换到第一个
+                        if remaining_handles:
+                            self.driver.switch_to.window(remaining_handles[0])
+                            print("已切换到剩余的第一个标签页")
                         else:
-                            logger.info("已全部观看完成，退出程序")
-                            self.is_running = False
-                            break
+                            print("所有标签页已关闭")
+                            # if self.check_study_time2():
+                            #     # 播放下一个视频
+                        logger.info(
+                            f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
+                        threading.Thread(target=self.open_home, daemon=True).start()
+                        self.current_course_id = ""
+                        sleep_time = 60
+                        # else:
+                        #     logger.info("已全部观看完成，退出程序")
+                        #     self.is_running = False
+                        # break
                     else:
-                        logger.info(f"{self.user_data_dir}的【{self.current_course_id}】未观看完成")
-                        if not call_login:
-                            logger.info(
-                                f"{self.user_data_dir}totalPeriod: {detail_json['totalPeriod']}, watchTimes: {detail_json['watchTimes']}")
-                            sleep_time = (int(detail_json["totalPeriod"]) - int(detail_json["watchTimes"]))
-                            # 间隔时间最小30秒，最大为：10分钟-20分钟以内的随机值
-                            if sleep_time < 30:
-                                sleep_time = 30
-                            if sleep_time > 600:
-                                sleep_time = random.randint(600, 1200)
-                        else:
-                            logger.info("重新登录，重新打开页面")
-                            threading.Thread(target=self.open_home, daemon=True).start()
-                            self.current_course_id = ""
-                    call_login = False
+                        # 当前视频未播放完成，间隔5-10分钟继续检测
+                        logger.info(
+                            f"{self.user_data_dir}的【{self.current_course_id}】未观看完成，进度：{detail_json['learnPercent']}")
+                        sleep_time = random.randint(300, 600)
                 except TimeoutException:
                     logger.error("链接超时")
                     continue
@@ -818,6 +843,62 @@ class TeacherTrainingChecker:
 
             logger.info(f"{self.user_data_dir}间隔{sleep_time}秒，继续检测")
             time.sleep(sleep_time)
+
+    def check_course_play_status(self):
+        while self.is_running:
+            logger.info("间隔30秒，检测视频播放状态")
+            time.sleep(30)
+            # 尝试查找"课程评价弹框，当出现课程评价弹框，说明当前课程已完成"
+            # 等待并查找文本为 "课程评价" 的 span 元素
+            try:
+                complete_span = WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((By.XPATH, '//span[text()="课程评价"]'))
+                )
+                logger.info("✅ 找到 '课程评价' 标签，当前课程已完成")
+                # 当前视频已播放完成，可以关闭当前窗体，然后刷新页面，播放下一个视频
+                self.driver.close()
+                # 获取关闭后的窗口句柄
+                remaining_handles = self.driver.window_handles
+                print(f"关闭后标签页数量: {len(remaining_handles)}")
+
+                # 如果还有剩余的tab，切换到第一个
+                if remaining_handles:
+                    self.driver.switch_to.window(remaining_handles[0])
+                    print("已切换到剩余的第一个标签页")
+                else:
+                    print("所有标签页已关闭")
+                    # if self.check_study_time2():
+                    #     # 播放下一个视频
+                time.sleep(30)
+                continue  # 表示已完成，可以切换下一个课程
+            except TimeoutException:
+                logger.info("🟢 未找到 '课程评价' 标签，当前课程可能未完成")
+
+            # 尝试查找 pausecenter 元素（最多等待3秒）
+            try:
+                required_div = WebDriverWait(self.driver, 3).until(
+                    EC.presence_of_element_located((
+                        By.XPATH,
+                        '//div[starts-with(@class, "pausecenter")]'
+                    ))
+                )
+
+                # 获取 style 中的 display 属性
+                display_style = required_div.value_of_css_property('display')
+
+                # 判断 display 是否为 'none'
+                if display_style == 'none':
+                    logger.info(f"pausecenter 元素存在，但 display: {display_style}，跳过点击")
+                else:
+                    required_div.click()
+                    logger.info(f"pausecenter 元素 visible (display: {display_style})，已点击")
+
+            except TimeoutException:
+                logger.info("未找到 pausecenter 元素（超时），跳过点击")
+            except NoSuchElementException:
+                logger.info("未找到 pausecenter 元素，跳过点击")
+            except Exception as e:
+                logger.warning(f"检查或点击 pausecenter 元素时发生异常: {e}")
 
     def init_browser(self):
         logger.info(f"{self.user_data_dir}开始初始化浏览器文件夹")
@@ -1010,6 +1091,7 @@ class TeacherTrainingChecker:
         # self.check_study_time2()
         self.open_home()
         threading.Thread(target=self.check_course_success, daemon=True).start()
+        threading.Thread(target=self.check_course_play_status, daemon=True).start()
         while self.is_running:
             time.sleep(1)
         logger.info(f"{self.user_data_dir}视频已全部播放完成")
