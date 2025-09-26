@@ -4,7 +4,6 @@ import random
 import re
 import sys
 import threading
-import time
 from urllib.parse import unquote
 from urllib.parse import urlparse, parse_qs
 
@@ -156,6 +155,68 @@ def continue_task():
             thread.start()  # 启动线程
             time.sleep(10)
     logger.info("继续未完成的工作")
+
+
+import time
+import dashscope
+
+# 设置你的 API Key
+dashscope.api_key = "sk-b1fc73875d134f34b0f2d579b9291281"  # 替换为你的实际密钥
+
+
+def get_qwen_answer(question_content):
+    """
+    调用 Qwen 模型，输入题目内容，返回选择题答案选项（如 'A'）
+
+    :param question_content: 题目文本（支持单选/多选题）
+    :return: 答案字母（如 'C'），失败时返回 None
+    """
+    messages = [
+        {
+            'role': 'system',
+            'content': '你是一个知识丰富的助手，请根据问题给出准确、简洁的回答。'
+                       '如果是选择题，请在最后明确写出答案选项，并只返回选项字母（如：C）'
+                       '如果是判断题，正确返回：A，错误返回：B'
+        },
+        {
+            'role': 'user',
+            'content': question_content
+        }
+    ]
+
+    try:
+        time_start = time.time()
+        response = dashscope.Generation.call(
+            model="qwen3-8b",
+            messages=messages,
+            enable_thinking=False,
+            result_format='text'
+        )
+        time_end = time.time()
+
+        # 检查响应是否成功
+        if response.status_code == 200:
+            answer = response.output.text.strip()
+            print(f"✅ 模型响应: {answer}")
+            print(f"⏱ 耗时: {time_end - time_start:.2f} 秒")
+
+            # 提取答案字母（A / B / C / D / ...）
+            # 假设模型输出类似 "C" 或 "答案：C"，我们只取最后一个字母
+            import re
+            match = re.findall(r'[A-Z]', answer)
+            if match:
+                unique_match = list(dict.fromkeys(match))
+                return unique_match
+            else:
+                print("⚠️ 未从响应中提取到有效选项字母，返回D")
+                return ["D"]
+        else:
+            print(f"❌ 调用失败: {response.code} - {response.message}")
+            return None
+
+    except Exception as e:
+        print(f"❌ 请求出错: {str(e)}")
+        return None
 
 
 def parse_courseid_by_regex(url):
@@ -379,12 +440,25 @@ class TeacherTrainingChecker:
         # 开始判断是否完成课程
         column_wrap = current_course.find_element(By.CLASS_NAME, "column-wrap")
         video_process = column_wrap.find_elements(By.CLASS_NAME, "el-progress__text")
-        learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去学习' or .= '去学习']")
-        learn_elements.click()
-        logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
 
+        # 如果不为已学100%，找到去学习按钮，进行学习
+        if "已学100%" != video_process[0].text:
+            learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去学习' or .= '去学习']")
+            learn_elements.click()
+            logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
+            self.open_course()
+        # 如果不为已考100%，找到去考试按钮，进行考试
+        if "已考100%" != video_process[1].text:
+            learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去考试' or .= '去考试']")
+            learn_elements.click()
+            logger.info("打开考试")
+            self.open_exam()
+
+        logger.info("当前课程已完成")
+
+    def open_course(self):
         try:
-            course_list_div = WebDriverWait(self.driver, 10).until(
+            WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, 'div.course-list.cb'))
             )
             print("元素已找到")
@@ -499,6 +573,139 @@ class TeacherTrainingChecker:
             logger.info(f"点击开始播放视频：{self.current_course_id}")
         except Exception as e:
             print(f"获取元素时发生错误: {e}")
+
+    def open_exam(self):
+        logger.info("打开考试")
+        go_exam = "button.Clearfix.goExam"
+        go_exam_success = False
+        try:
+            go_exam_button = WebDriverWait(self.driver, 3).until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, go_exam))
+            )
+            go_exam_button.click()
+            go_exam_success = True
+            confirm_button = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//div[@class='el-message-box__btns']//button[.//span[text()='确认']]"))
+            )
+            confirm_button.click()
+            logger.info("✅ '确认' 按钮已点击！")
+        except Exception as e:
+            logger.info("去考试元素找不到，开始检测继续考试元素")
+
+        if not go_exam_success:
+            continue_exam = "button.Clearfix.continueExam"
+            try:
+                continue_exam_button = WebDriverWait(self.driver, 3).until(
+                    EC.element_to_be_clickable(
+                        (By.CSS_SELECTOR, continue_exam))
+                )
+                continue_exam_button.click()
+                logger.info("点击继续考试")
+            except Exception as e:
+                logger.info("继续考试元素找不到")
+
+        logger.info("开始考试")
+        for i in range(1, 26):
+            self.answer_radio_question(f"char_{i}")
+        for i in range(26, 46):
+            self.answer_checkbox_question(f"char_{i}")
+        for i in range(46, 56):
+            self.answer_judge_question(f"char_{i}")
+
+    def answer_radio_question(self, id):
+        # 获取问题文本
+        question_box = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, f"//div[@id='{id}']//div[@class='question-box oh']/h2"))
+        )
+        question_text = question_box.text
+        print(f"问题: {question_text}")
+
+        # 获取选项及其值
+        radio_group = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located(
+                (By.XPATH, f"//div[@id='{id}']//div[contains(@class, 'ml40') and contains(@class, 'radio_group')]"))
+        )
+        answer = ""
+        options = radio_group.find_elements(By.XPATH, ".//label")
+        for option in options:
+            letter = option.find_element(By.XPATH, ".//span[@class='el-radio__label']").text.split()[0]  # 获取选项字母
+            value = option.find_element(By.XPATH, ".//span[@data-v-7915584a]").text  # 获取选项值
+            print(f"{letter}: {value}")
+            answer = answer + f"\n{letter}. {value}"
+        # 调用GPT获取答案
+        qwen_answer = get_qwen_answer(f"{question_text}{answer}")
+        for item in qwen_answer:
+            if item == "A":
+                options[0].click()
+            elif item == "B":
+                options[1].click()
+            elif item == "C":
+                options[2].click()
+            elif item == "D":
+                options[3].click()
+        logger.info("第一题回答完成")
+
+    def answer_checkbox_question(self, div_id):
+        # 找到包含问题的 div
+        question_div = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, f"//div[@id='{div_id}']//div[@class='question-box oh']/h2"))
+        )
+        question_text = question_div.text
+        print(f"问题: {question_text}")
+
+        # 找到包含选项的 div
+        options_div = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, f"//div[@id='{div_id}']//div[contains(@class, 'check_group')]"))
+        )
+
+        # 提取所有选项及其值
+        options_elements = options_div.find_elements(By.XPATH, ".//label")
+        options = {}
+        answer = ""
+        for option in options_elements:
+            letter = option.find_element(By.XPATH, ".//span[@class='el-checkbox__label']").text.split()[0]  # 获取选项字母
+            value = option.find_element(By.XPATH, ".//span[@data-v-7915584a]").text  # 获取选项值
+            options[letter] = value
+            print(f"{letter}: {value}")
+            answer = answer + f"\n{letter}. {value}"
+        # 调用GPT获取答案
+        qwen_answer = get_qwen_answer(f"{question_text}{answer}")
+        for item in qwen_answer:
+            if item == "A":
+                options_elements[0].click()
+            elif item == "B":
+                options_elements[1].click()
+            elif item == "C":
+                options_elements[2].click()
+            elif item == "D":
+                options_elements[3].click()
+            elif item == "E":
+                options_elements[4].click()
+            elif item == "F":
+                options_elements[5].click()
+        logger.info("多选题回答完成")
+
+    def answer_judge_question(self, div_id):
+        # 1. 获取问题文本
+        question_element = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, f"//div[@id='{div_id}']//div[@class='question-box oh']/h2"))
+        )
+        question_text = question_element.text
+        print(f"问题: {question_text}")
+
+        # 2. 提取选项文本（"正确" 和 "错误"）
+        option_labels = self.driver.find_elements(By.XPATH,
+                                                  f"//div[@id='{div_id}']//label[@role='radio']//span[@class='el-radio__label']")
+
+        qwen_answer = get_qwen_answer(f"{question_text}\n正确\n错误")
+        for item in qwen_answer:
+            if item == "A":
+                option_labels[0].click()
+            elif item == "B":
+                option_labels[1].click()
+        logger.info("判断题回答完成")
 
     def extract_param_from_hash_url(self, url, param_name):
         """
@@ -1090,8 +1297,8 @@ class TeacherTrainingChecker:
         self.is_login()
         # self.check_study_time2()
         self.open_home()
-        threading.Thread(target=self.check_course_success, daemon=True).start()
-        threading.Thread(target=self.check_course_play_status, daemon=True).start()
+        # threading.Thread(target=self.check_course_success, daemon=True).start()
+        # threading.Thread(target=self.check_course_play_status, daemon=True).start()
         while self.is_running:
             time.sleep(1)
         logger.info(f"{self.user_data_dir}视频已全部播放完成")
