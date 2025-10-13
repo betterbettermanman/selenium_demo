@@ -333,8 +333,7 @@ class TeacherTrainingChecker:
             'Connection': 'keep-alive',
             "hrttoken": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJPcmdhbklkIjoiMDE5ODMxMDAtZGI1Ni03MWNjLWI2NGQtNmY4NGQwYWM3MGQwIiwiQ2xpZW50VHlwZSI6IiIsIk9yZ2FuTmFtZSI6IuWvjOeJm-Wwj-WtpiIsIkFzc2Vzc1R5cGUiOjAsIlVzZXJJZCI6IjAxOTgzYzdmLTMxZWItN2I0NC1hNzRmLWZhZTRiYjliNmI3YiIsIk9yZ2FuUGF0aCI6IjJjNTUxYTczLTViNDEtMTFlZC05NTFhLTBjOWQ5MjY1MDRmMyxjMWJmNjBjNS01YjQxLTExZWQtOTUxYS0wYzlkOTI2NTA0ZjMsMDE4YTQ1YmMtZWVmNi03NzFmLTkzZGEtMzU2NDIyYzRkNTAyLGNkNGFlNWI0LTQxOTctNGUzNC1iNGVmLWNiMmVkNzg4YzNmYiwwMThjYWFhMy1lZDMzLTdkNDAtYmFhMy1iZjRlYTU3NzQ2ZTAsMDE5ODI2NDAtY2Y0YS03ZmQ1LWFiNDMtNzk4M2VmMDJiNmYwLDAxOTgzMTAwLWRiNTYtNzFjYy1iNjRkLTZmODRkMGFjNzBkMCIsImV4cCI6MTc1MzQ2MzE2MCwidXNlcm5hbWUiOiI3YTE1ZTZmNjNlYzM5YmM5In0.oQd_HlYVRr2_vC3U2DP31Vw62oYOgOLgWFD8n9KoEnI"
         }
-        self.video_name = ["中国式现代化理论体系", "习近平新时代中国特色社会主义思想", "总体国家安全观",
-                           "习近平强军思想"]
+        self.video_name = "眉山2024年度数字经济与驱动发展"
         self.current_video_url_index = current_video_url_index
         # 默认检测时间，当时间重复3次，说明观看异常，重新打开页面进行观看
         self.sleep_time = 10
@@ -447,14 +446,16 @@ class TeacherTrainingChecker:
             learn_elements.click()
             logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
             self.open_course()
+            return "course"
         # 如果不为已考100%，找到去考试按钮，进行考试
         if "已考100%" != video_process[1].text:
             learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去考试' or .= '去考试']")
             learn_elements.click()
             logger.info("打开考试")
             self.open_exam()
-
+            return "exam"
         logger.info("当前课程已完成")
+        return "complete"
 
     def open_course(self):
         try:
@@ -1295,10 +1296,9 @@ class TeacherTrainingChecker:
         self.init_browser()
         # 判断用户是否登录
         self.is_login()
-        # self.check_study_time2()
-        self.open_home()
-        # threading.Thread(target=self.check_course_success, daemon=True).start()
-        # threading.Thread(target=self.check_course_play_status, daemon=True).start()
+        if self.open_home() == "course":
+            threading.Thread(target=self.check_course_success, daemon=True).start()
+            threading.Thread(target=self.check_course_play_status, daemon=True).start()
         while self.is_running:
             time.sleep(1)
         logger.info(f"{self.user_data_dir}视频已全部播放完成")
