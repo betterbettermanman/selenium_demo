@@ -1,7 +1,8 @@
+import json
+import logging
 import os
 import re
 import time
-import logging
 from threading import Thread
 from time import sleep
 
@@ -482,9 +483,37 @@ def newVideoplay(course_status, driver, wait, wait_3, main_window_handle):
 
     if not has_processed:
         logging.info("视频已全部播放完毕，请检查...")
+        # 打开学时页面，进行截图操作，并保存下来
+        save_play_result(driver)
         driver.quit()
         is_running = False
         logging.info("浏览器已关闭")
+
+
+def save_play_result(driver):
+    try:
+        # 2. 打开指定页面
+        url = BASE_URL  # 👈 替换为你想打开的网址
+        driver.get(url)
+
+        # 3. 等待页面加载完成（可选：等待某个元素出现）
+        # 例如：等待 body 加载
+        # wait = WebDriverWait(driver, 10)
+        # wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+        # 可选：等待几秒确保动态内容加载（如 JS 渲染的内容）
+        time.sleep(5)
+
+        # 4. 截图并保存到本地
+        screenshot_path = "学时截图.png"  # 保存的文件名
+        driver.save_screenshot(screenshot_path)
+        # 或者使用：
+        # driver.get_screenshot_as_file(screenshot_path)
+
+        logging.info(f"✅ 页面截图已保存至: {screenshot_path}")
+
+    except Exception as e:
+        logging.error(f"❌ 操作失败: {e}")
 
 
 def init_shared_browser(head=True, user_data_dir2="chrome_user_data", chromedriver_path=None):
@@ -537,41 +566,44 @@ def check_login():
 
     driver.close()
 
+
 def auto_login():
     driver.get("https://auth.smartedu.cn/uias/login")
 
 
+def read_json_config(config_path):
+    """
+    读取JSON配置文件
+    :param config_path: 配置文件路径
+    :return: 配置字典，如果出错返回None
+    """
+    try:
+        # 检查文件是否存在
+        if not os.path.exists(config_path):
+            print(f"错误：配置文件 {config_path} 不存在")
+            return None
+
+        # 打开并读取JSON文件
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)  # 自动转换为Python字典/列表
+            return config
+
+    except json.JSONDecodeError as e:
+        print(f"错误：JSON格式解析失败 - {str(e)}")
+        return None
+    except Exception as e:
+        print(f"读取配置文件出错 - {str(e)}")
+        return None
+
+
+config_json = read_json_config("config.json")
+
 # 需要修改的地方
 CHROMEDRIVER_PATH = "chromedriver.exe"
-BASE_URL = "https://basic.smartedu.cn/training/10f7b3d6-e1c6-4a2e-ba76-e2f2af4674a5"
-target_courses = [
-    {
-        "title": "大力弘扬教育家精神",
-        "url": "https://basic.smartedu.cn/teacherTraining/courseDetail?courseId=cb134d8b-ebe5-4953-8c2c-10d27b45b8dc&tag=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&channelId=&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&breadcrumb=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&resourceId=d2bdf509-3049-4487-a985-eed857ca003a",
-        "complete_status": False,
-    },
-    {
-        "title": "数字素养提升",
-        "url": "https://basic.smartedu.cn/teacherTraining/courseDetail?courseId=0bc83fd8-4ee9-4bb2-bf9d-f858ee13ed8f&tag=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&channelId=&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&breadcrumb=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&resourceId=4bc3d1c8-2358-4e1c-ac79-a70620ed175c",
-        "complete_status": False,
-    },
-    {
-        "title": "科学素养提升",
-        "url": "https://basic.smartedu.cn/teacherTraining/courseDetail?courseId=d21a7e80-cbb4-492a-9625-d8ea8f844515&tag=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&channelId=&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&breadcrumb=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&resourceId=7626d7f5-0d47-4f1e-998f-8a55f39043d7",
-        "complete_status": False,
-    }, {
-        "title": "心理健康教育能力提升",
-        "url": "https://basic.smartedu.cn/teacherTraining/courseDetail?courseId=e6a702f8-552d-49f6-89e7-b40ce5e445af&tag=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&channelId=&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&breadcrumb=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&resourceId=119325b4-2204-4103-9d06-aea35ed21374",
-        "complete_status": False,
-    }, {
-        "title": "学科教学能力提升",
-        "url": "https://basic.smartedu.cn/teacherTraining/courseDetail?courseId=895caa6f-6c42-411d-ab7c-2b43facebd9f&tag=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&channelId=&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&breadcrumb=2025%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98&resourceId=d4807973-1dd3-41ce-b647-75f60b94bd99",
-        "complete_status": False,
-    },
-]
+BASE_URL = config_json["base_url"]
+target_courses = config_json["target_courses"]
 
-user_data_dir = "18080395300"
-password = "Zhying0521"
+user_data_dir = "user_data_dir"
 
 if __name__ == "__main__":
     check_login()
