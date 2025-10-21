@@ -18,7 +18,7 @@ def get_local_storage_value(key, driver1):
 
 
 def init_browser():
-    user_data_dir = "15281785225"
+    user_data_dir = "15984382071"
     logger.info(f"{user_data_dir}开始初始化浏览器文件夹")
     # 创建保存用户数据的目录
     user_data_dir = os.path.join(os.getcwd(), "data", user_data_dir)

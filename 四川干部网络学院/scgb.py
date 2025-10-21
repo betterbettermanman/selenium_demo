@@ -908,6 +908,7 @@ class TeacherTrainingChecker:
                 EC.presence_of_element_located((By.CLASS_NAME, "validate-form-img"))
             )
             logger.info("找到验证码图片容器")
+            os.makedirs("png", exist_ok=True)
             save_path = "png/" + self.username + ".png"  # 保存路径可自定义
             success = formdata_div.screenshot(save_path)
 
