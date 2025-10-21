@@ -427,10 +427,10 @@ class TeacherTrainingChecker:
             span_values = [span.text for span in span_elements]
 
             # 打印结果
-            print("所有span标签的值：")
+            logger.info("所有span标签的值：")
             is_return = False
             for value in span_values:
-                print(value)
+                logger.info(value)
                 if value == sss:
                     current_course = parent
                     is_return = True
@@ -462,10 +462,10 @@ class TeacherTrainingChecker:
             WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, 'div.course-list.cb'))
             )
-            print("元素已找到")
+            logger.info("课程列表元素已找到")
             time.sleep(5)
         except TimeoutException:
-            print("超过10秒未找到元素")
+            logger.info("超过10秒未找到课程列表元素")
 
         try:
             # 定位到class为"course-list cb"的div元素
@@ -512,7 +512,7 @@ class TeacherTrainingChecker:
                     break
             time.sleep(2)
             # 在新标签页中操作元素（示例：获取页面标题和某个元素）
-            print(f"新标签页标题: {self.driver.title}")
+            # print(f"新标签页标题: {self.driver.title}")
             course_list_div2 = self.driver.find_element(By.CSS_SELECTOR, 'div.course-catalog.m0')
             all_li_elements = course_list_div2.find_elements(By.TAG_NAME, 'li')
             for index, li in enumerate(all_li_elements, 1):
@@ -586,11 +586,11 @@ class TeacherTrainingChecker:
             )
             go_exam_button.click()
             go_exam_success = True
-            confirm_button = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, "//div[@class='el-message-box__btns']//button[.//span[text()='确认']]"))
+            el_message_box__btns = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "el-message-box__btns"))
             )
-            confirm_button.click()
+            button_elements = el_message_box__btns.find_elements(By.XPATH, "./button")
+            button_elements[1].click()
             logger.info("✅ '确认' 按钮已点击！")
         except Exception as e:
             logger.info("去考试元素找不到，开始检测继续考试元素")
@@ -614,6 +614,10 @@ class TeacherTrainingChecker:
             self.answer_checkbox_question(f"char_{i}")
         for i in range(46, 56):
             self.answer_judge_question(f"char_{i}")
+        logger.info("答题完成，点击交卷")
+        # todo 待测试
+        element = self.driver.find_element(By.LINK_TEXT, "我要交卷")
+        element.click()
 
     def answer_radio_question(self, id):
         # 获取问题文本
@@ -1008,14 +1012,14 @@ class TeacherTrainingChecker:
                         self.driver.close()
                         # 获取关闭后的窗口句柄
                         remaining_handles = self.driver.window_handles
-                        print(f"关闭后标签页数量: {len(remaining_handles)}")
+                        logger.info(f"关闭后标签页数量: {len(remaining_handles)}")
 
                         # 如果还有剩余的tab，切换到第一个
                         if remaining_handles:
                             self.driver.switch_to.window(remaining_handles[0])
-                            print("已切换到剩余的第一个标签页")
+                            logger.info("已切换到剩余的第一个标签页")
                         else:
-                            print("所有标签页已关闭")
+                            logger.info("所有标签页已关闭")
                             # if self.check_study_time2():
                             #     # 播放下一个视频
                         logger.info(
