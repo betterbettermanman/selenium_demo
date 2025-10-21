@@ -1,0 +1,410 @@
+
+#app {
+    --color: #555;
+
+    width: 100%;
+    height: 100%;
+    padding: 32px;
+    box-sizing: border-box;
+
+    .search {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+
+        .input-content {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input {
+            width: 240px;
+        }
+
+        .btn {
+            user-select: none;
+        }
+
+        .btn.disabled {
+            background-color: #fafafa;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .radio-content {
+            display: flex;
+            align-items: center;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            font-size: 16px;
+            align-items: center;
+        }
+
+        .radio-group label {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        input[type="radio"] {
+            accent-color: #28a745;
+            width: 16px;
+            height: 16px;
+        }
+
+        .group-title {
+            font-weight: bold;
+        }
+    }
+
+    .table {
+        position: relative;
+        border: 1px solid var(--color);
+        border-radius: 8px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-height: 614px;
+
+        .th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background-color: #fff;
+            display: flex;
+            border-bottom: 1px solid var(--color);
+        }
+
+        .tb {
+            min-height: 570px;
+        }
+
+        .row {
+            display: flex;
+            border-bottom: 1px solid var(--color);
+            transition: all 0.3s ease-in-out;
+        }
+
+        .active {
+            background-color: #c0c0c0;
+        }
+
+        .td {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            border-right: 1px solid var(--color);
+            gap: 8px;
+            flex-wrap: wrap;
+            max-height: 56px;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        .opt {
+            justify-content: flex-start;
+            padding: 12px 64px;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .td:last-child {
+            border: none;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 12px;
+            line-height: 1.5;
+            cursor: default;
+            transition: all 0.2s ease;
+        }
+
+        .tag-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .tag-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 8px;
+        user-select: none;
+
+        .info {
+            display: flex;
+            align-items: center;
+
+            .info-sub {
+                margin-right: 8px;
+            }
+        }
+
+        .page-list {
+            display: flex;
+            gap: 8px;
+            padding: 0;
+            margin-right: 8px;
+        }
+
+        .item {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .item:hover {
+            background-color: #e0e0e0;
+        }
+
+        .item.active {
+            background-color: #c0c0c0;
+            font-weight: bold;
+            cursor: default;
+        }
+
+        .item.disabled {
+            background-color: #fafafa;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .page-size {
+            margin-right: 8px;
+        }
+
+        select {
+            padding: 2px 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .jump-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .jump-page input {
+            width: 32px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .jump-page button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .jump-page button:hover {
+            background-color: #e0e0e0;
+        }
+    }
+
+    .modal-overlay {
+        position: fixed;
+        z-index: 2;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.3);
+        /*backdrop-filter: blur(2px);*/
+        display: flex;
+        justify-content: center;
+        /*align-items: center;*/
+    }
+
+    .modal {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        margin-top: 5%;
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 16px 12px;
+        width: 400px;
+        height: 300px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        animation: fadeIn 0.3s ease;
+        overflow: hidden;
+
+        .title {
+            margin-top: 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            flex: 1;
+            font-size: 14px;
+            color: #666;
+            padding: 12px 0 32px;
+            text-align: left;
+            word-break: break-all;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .row {
+            position: relative;
+        }
+
+        .course {
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .course.active {
+            color: #3b82f6;
+        }
+
+        .course:active {
+            opacity: 0.9;
+        }
+
+        .bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            width: calc(100% - 20px);
+        }
+
+        .icon {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .icon:after {
+            opacity: 0.9;
+        }
+    }
+
+    .btn {
+        position: relative;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+    }
+
+    .btn-primary {
+        width: 100%;
+        background: #f0f4ff;
+        color: #3b82f6;
+    }
+
+    .btn-primary.disabled {
+        cursor: not-allowed;
+    }
+
+    .btn-primary:hover {
+        background: #e0e9ff;
+    }
+
+    .btn-close {
+        background: #f9f9f9;
+        color: #666;
+        margin-top: 10px;
+    }
+
+    .btn-close:hover {
+        background: #eee;
+    }
+
+    .close {
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        font-size: 20px;
+        color: #333;
+        cursor: pointer;
+    }
+
+    .close:active {
+        opacity: 0.9;
+    }
+}
+
+.v-loading-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.v-loading-spinner {
+    border: 3px solid #ccc;
+    border-top-color: #409eff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    box-sizing: border-box;
+}
+
+.v-loading-fullscreen {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

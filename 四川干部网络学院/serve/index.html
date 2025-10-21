@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>system</title>
+  <link href="/favicon.ico" rel="icon">
+  <link href="/css/reset.css" rel="stylesheet">
+  <link href="/css/index.css" rel="stylesheet">
+  <script src="/core/vue.global.prod.js"></script>
+  <script src="/main.js" type="module"></script>
+</head>
+
+<body>
+<div id="app">
+  <div class="search">
+    <div class="input-content">
+      <input @keyup.enter="search" class="input" name="search" placeholder="输入名称/手机号" type="text"
+             v-model="params.name" />
+      <button @click="reset" class="btn">
+        重置
+      </button>
+      <button @click="handleAdd" class="btn">
+        新增
+      </button>
+    </div>
+  </div>
+  <div class="table">
+    <div class="th">
+      <div :key="item.key" :style="{ width: item.width }" class="td" v-for="item in thList">
+        {{ item.label }}
+      </div>
+    </div>
+    <div class="tb" v-loading="tableLoading">
+      <div :class="{ active: item.id === currentId }" :key="item.id" class="row" v-for="(item, index) in rowList">
+        <div :class="cell.key" :key="cell.key" :style="{ width: cell.width }" class="td" v-for="cell in thList">
+          <template v-if="cell.key==='index'">
+            {{ index + 1 }}
+          </template>
+          <template v-else-if="cell.key==='is_running'">
+            <div :class="[item[cell.key] === '0' ? 'tag-danger' : 'tag-success']" class="tag">
+              {{ item[cell.key] === '0' ? '未运行' : '运行中' }}
+            </div>
+          </template>
+          <template v-else-if="cell.key==='status'">
+            <div :class="[item[cell.key] === '0' ? 'tag-danger' : 'tag-success']" class="tag">
+              {{ item[cell.key] === '0' ? '未完成' : '已完成' }}
+            </div>
+          </template>
+          <template v-else-if="cell.key==='opt'">
+            <button @click="handleRetry(item.id)" class="btn"
+                    v-loading="{ show: retryLoading && currentId === item.id, size: 20}">
+              重试
+            </button>
+            <button @click="handleSendCode(item.id)" class="btn">
+              发送验证码
+            </button>
+            <button @click="handleForceRetry(item.id)" class="btn"
+                    v-loading="{ show: forceRetryLoading && currentId === item.id, size: 20}">
+              强制重试
+            </button>
+            <button @click="handleOpenBrowser(item.id)" class="btn"
+                    v-loading="{ show: openBrowserLoading && currentId === item.id, size: 20}">
+              打开浏览器
+            </button>
+            <button @click="handleCloseBrowser(item.id)" class="btn"
+                    v-loading="{ show: closeBrowserLoading && currentId === item.id, size: 20}">
+              关闭浏览器
+            </button>
+          </template>
+          <template v-else>
+            {{ item[cell.key] || '--' }}
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pagination">
+    <div class="info">
+      <div class="info-sub" v-cloak>
+        当前页：{{ params.pageNo }}
+      </div>
+      <div class="info-sub" v-cloak>
+        总共：{{ total }} 条
+      </div>
+    </div>
+    <div class="page-list">
+      <div class="item" :class="{ disabled: params.pageNo === 1 }" @click="prevPage">上一页</div>
+      <div class="item" :class="{ active: page ===  params.pageNo }" :key="page" @click="goPage(page)"
+           v-for="page in pages">
+        {{ page }}
+      </div>
+      <div class="item" :class="{ disabled: params.pageNo === pages }" @click="nextPage">下一页</div>
+    </div>
+    <div class="page-size">
+      每页显示：
+      <select @change="goPage(1)" v-model.number="params.pageSize">
+        <option :key="size" :value="size" v-for="size in pageSizeOptions">
+          {{ size }}
+        </option>
+      </select> 条
+    </div>
+    <div class="jump-page">
+      跳至
+      <input :max="pages" @keyup.enter="jumpPage" min="1" type="number" v-model.number="jumpPageNo" />
+      页
+      <button @click="jumpPage">确定</button>
+    </div>
+  </div>
+  <div class="modal-overlay" v-if="showModal">
+    <div class="modal" v-cloak v-loading="modalLoading">
+      <h2 class="title">{{ title }}</h2>
+      <div class="content">
+        <template v-if="step === 1">
+          <div class="row">
+            <input name="username" placeholder="请输入用户名" type="text" v-model="paramsStep1.username" />
+          </div>
+          <div class="row">
+            <input name="password" placeholder="请输入密码" type="text" v-model="paramsStep1.password" />
+            <div @click.stop="toggleAutoPassword" class="icon">
+              {{ autoPassword ? '❎' : '✅' }}
+            </div>
+          </div>
+          <div class="row bottom">
+            <button :class="{ disabled: !paramsStep1.username || !paramsStep1.password }" @click="handleStep1"
+                    class="btn btn-primary">
+              确定
+            </button>
+          </div>
+        </template>
+        <template v-if="step === 2">
+          <div class="row">
+            <input name="code" placeholder="请输入验证码" type="text" v-model="paramsStep2.code" />
+          </div>
+          <div class="row bottom">
+            <button @click="resendCode" class="btn btn-primary" v-loading="{ show: resendLoading, size: 20}">
+              重发验证码
+            </button>
+            <button :class="{ disabled: !paramsStep2.code }" @click="handleStep2" class="btn btn-primary">
+              确定
+            </button>
+          </div>
+        </template>
+        <template v-if="step === 3">
+          <div :class="{active:item.id === paramsStep3.class_id}" :key="item.id" @click="selectCourse(item)"
+               class="course"
+               v-for="item in courseList">
+            {{ item.name }}
+          </div>
+          <div class="row bottom">
+            <button :class="{ disabled: !paramsStep3.class_id }" @click="handleStep3" class="btn btn-primary">
+              确定
+            </button>
+          </div>
+        </template>
+      </div>
+      <div @click.stop="toggleModal(false)" class="close">✕</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
