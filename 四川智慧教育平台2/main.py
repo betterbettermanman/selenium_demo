@@ -87,21 +87,18 @@ def select_data():
         return
     # 打印表头
     print(
-        f" {'名称':<10} {'用户名':<15} {'密码':<15} {'是否头部':<8} {'起始索引':<8} {'状态':<8} {'创建时间'}")
+        f" {'名称':<15} {'用户名':<10} {'密码':<15} {'是否头部':<8}  {'进度':<8}")
     print("-" * 80)
 
     # 打印每条记录
     for row in play_result_data:
         # 处理datetime对象的格式化
-        created_at = row['created_at'].strftime('%Y-%m-%d %H:%M:%S') if row['created_at'] else ''
         print(
             f"{row['name']:<15} "
             f"{row['username']:<10} "
             f"{row['password']:<15} "
             f"{row['is_head']:<8} "
-            f"{row['start_index']:<8} "
-            f"{row['status']:<8} "
-            f"{created_at}"
+            f"{row['requiredPeriod']:<8} "
         )
 
     print(f"\n共查询到 {len(play_result_data)} 条记录")
@@ -144,15 +141,25 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
     logger.info(f"{username}数据更新成功")
 
 
+# 添加容器，一次最多运行15个，然后动态检测，是否运行完成，运行完成，重新添加进去
+task_contain = []
+max_task_num = 1
+
+
 def continue_task():
+    # todo 需要动态修改的
+    target_num = 2
     result = select_data()
     for row in result:
+        if len(task_contain) >= max_task_num:
+            break
         # 判断是否执行完成
-        if row['status'] != '2':
+        if int(row['requiredPeriod']) < target_num:
             check = TeacherTrainingChecker(row['name'], row['username'], row['password'],
-                                           row['is_head'], row['start_index'], row['no_play_videos'])
+                                           row['is_head'], 0, [])
             thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
             thread.start()  # 启动线程
+            task_contain.append(row['username'])
             time.sleep(10)
     logger.info("继续未完成的工作")
 
@@ -424,14 +431,30 @@ class TeacherTrainingChecker:
             return
         logger.info(f"{self.user_data_dir}进行学习")
         logger.info(
-            f"{self.user_data_dir}打开首页，检测视频学习情况，current_video_url_index：{self.current_video_url_index}")
+            f"{self.user_data_dir}打开首页，检测视频学习情况")
         url = "https://basic.sc.smartedu.cn/hd/teacherTraining/coursedatail?courseId=1983474287572594688"
         self.driver.get(url)
         time.sleep(5)
         divs = self.driver.find_elements(By.CLASS_NAME, "course-list-cell")
+        required_period = 0
         for div in divs:
-            status = div.find_element(By.XPATH, ".//div[@class='status']")
-            if status.text != "已学习":
+            required_period = required_period + 1
+            try:
+                status = div.find_element(By.XPATH, ".//div[@class='status']")
+                if status.text != "已学习":
+                    div.click()
+                    logger.info("点击未播放视频")
+                    time.sleep(5)
+                    # 点击播放按钮
+                    video = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.ID, 'video'))
+                    )
+                    self.driver.execute_script("arguments[0].play();", video)
+                    logger.info("开始播放")
+                    # 从url中提取course_id
+                    self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
+                    return
+            except Exception as e:
                 div.click()
                 logger.info("点击未播放视频")
                 time.sleep(5)
@@ -442,9 +465,10 @@ class TeacherTrainingChecker:
                 self.driver.execute_script("arguments[0].play();", video)
                 logger.info("开始播放")
                 # 从url中提取course_id
-
                 self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
                 return
+
+        update_data(self.username, requiredPeriod=required_period)
         self.is_complete = True
 
     def open_course(self):
@@ -841,7 +865,7 @@ class TeacherTrainingChecker:
                     # logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
                     for detail in detail_json:
                         if self.current_course_id == detail["subsectionId"]:
-                            if detail["state"] == 3:
+                            if int(detail["schedule"]) >= 100:
                                 logger.info(
                                     f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
                                 threading.Thread(target=self.open_home, daemon=True).start()
@@ -849,7 +873,7 @@ class TeacherTrainingChecker:
                                 # 当前视频未播放完成，间隔5-10分钟继续检测
                                 logger.info(
                                     f"{self.user_data_dir}的【{self.current_course_id}】未观看完成，进度：{detail['schedule']}")
-                                sleep_time = random.randint(300, 600)
+                                sleep_time = random.randint(150, 300)
 
                 except TimeoutException:
                     logger.error("链接超时")
@@ -952,10 +976,8 @@ class TeacherTrainingChecker:
 
     def is_login(self):
         while True:
-            self.auto_login()
-            # time.sleep(10)
-            # self.driver.get("https://gp.chinahrt.com/index.html#/v_user_set")
-            time.sleep(3)
+            time.sleep(30)
+            # time.sleep(3)
             # 检查登录状态
             jwtToken = self.get_cookies_values("Teaching_Autonomic_Learning_Token")
 
@@ -967,6 +989,7 @@ class TeacherTrainingChecker:
                 return
             else:
                 logger.warning(f"{self.user_data_dir}未登录，请登录")
+            self.auto_login()
 
     def get_element_in_iframe(self, iframe_locator, element_locator):
         """
@@ -1093,6 +1116,7 @@ class TeacherTrainingChecker:
         return ""
 
     def exec_main(self):
+        global task_contain
         self.init_browser()
         # 判断用户是否登录
         self.is_login()
@@ -1103,20 +1127,9 @@ class TeacherTrainingChecker:
             time.sleep(1)
         logger.info(f"{self.user_data_dir}视频已全部播放完成")
         self.driver.close()
-        # update_data(self.username, status="2")
-
-
-# # 执行任务
-# @app.route('/execTask', methods=['POST'])
-# def exec_task():
-#     # 创建对象，执行任务
-#     logger.info("创建对象，执行任务")
-#     check = TeacherTrainingChecker(request.json['name'], request.json['username'], request.json['password'],
-#                                    request.json['isHead'], request.json['startIndex'])
-#     thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
-#     thread.start()  # 启动线程
-#     logger.info("任务已保存到数据库中，并开始执行")
-#     return jsonify({"result": "任务已开始"}), 200
+        task_contain = [num for num in task_contain if num != self.username]
+        # 重新触发任务，将任务加到指定数量
+        continue_task()
 
 
 if __name__ == '__main__':
