@@ -143,7 +143,7 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
 
 # 添加容器，一次最多运行15个，然后动态检测，是否运行完成，运行完成，重新添加进去
 task_contain = []
-max_task_num = 1
+max_task_num = 2
 
 
 def continue_task():
@@ -153,6 +153,9 @@ def continue_task():
     for row in result:
         if len(task_contain) >= max_task_num:
             break
+            # 判断当前容器是否包含当前任务
+        if row['username'] in task_contain:
+            continue
         # 判断是否执行完成
         if int(row['requiredPeriod']) < target_num:
             check = TeacherTrainingChecker(row['name'], row['username'], row['password'],
@@ -443,14 +446,14 @@ class TeacherTrainingChecker:
                 status = div.find_element(By.XPATH, ".//div[@class='status']")
                 if status.text != "已学习":
                     div.click()
-                    logger.info("点击未播放视频")
+                    logger.info(f"{self.user_data_dir}点击未播放视频")
                     time.sleep(5)
                     # 点击播放按钮
                     video = WebDriverWait(self.driver, 10).until(
                         EC.element_to_be_clickable((By.ID, 'video'))
                     )
                     self.driver.execute_script("arguments[0].play();", video)
-                    logger.info("开始播放")
+                    logger.info(f"{self.user_data_dir}开始播放")
                     # 从url中提取course_id
                     self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
                     return
@@ -860,7 +863,7 @@ class TeacherTrainingChecker:
                 try:
                     course_detail = requests.get(check_play_success_url, headers=self.headers)
                     # 可以打印完整的URL来验证
-                    logger.info(f"完整请求URL: {course_detail.url}")
+                    logger.info(f"{self.user_data_dir}完整请求URL: {course_detail.url}")
                     detail_json = course_detail.json()["returnData"]["studySubsectionUsers"]
                     # logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
                     for detail in detail_json:
@@ -976,7 +979,7 @@ class TeacherTrainingChecker:
 
     def is_login(self):
         while True:
-            time.sleep(30)
+            time.sleep(10)
             # time.sleep(3)
             # 检查登录状态
             jwtToken = self.get_cookies_values("Teaching_Autonomic_Learning_Token")
@@ -1082,6 +1085,16 @@ class TeacherTrainingChecker:
                 EC.element_to_be_clickable((By.CLASS_NAME, 'submit-btn'))
             )
             login_button.click()
+
+            try:
+                # 查找包含"取消"文本的a标签
+                cancel_button = WebDriverWait(self.driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), '取消')]"))
+                )
+                cancel_button.click()
+                logger.info(f"{self.user_data_dir}成功点击取消按钮")
+            except TimeoutException:
+                logger.info(f"{self.user_data_dir}5秒内未找到取消按钮，跳过")
 
         except TimeoutException:
             logger.error("超时未找到登录相关输入框")
