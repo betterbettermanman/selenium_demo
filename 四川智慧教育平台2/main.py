@@ -143,12 +143,12 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
 
 # 添加容器，一次最多运行15个，然后动态检测，是否运行完成，运行完成，重新添加进去
 task_contain = []
-max_task_num = 2
+max_task_num = 15
+# todo 需要动态修改的
+target_num = 2
 
 
 def continue_task():
-    # todo 需要动态修改的
-    target_num = 2
     result = select_data()
     for row in result:
         if len(task_contain) >= max_task_num:

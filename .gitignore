@@ -12,3 +12,4 @@ logs/*
 /jeecg-boot-module-system/jrebel-classpath-15664.jar
 /jeecg-boot-module-admin/logs/
 /jeecg-boot-module-system/logs/
+chromedriver.exe
