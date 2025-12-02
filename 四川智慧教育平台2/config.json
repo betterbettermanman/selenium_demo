@@ -25,7 +25,8 @@
     "username": "13679644177",
     "password": "Xsy_147258369",
     "is_head": 1,
-    "requiredPeriod": 2
+    "requiredPeriod": 2,
+    "remark": "徐思源"
   },
   {
     "name": "13890688046",
@@ -68,6 +69,15 @@
     "requiredPeriod": 2,
     "remark": "",
     "updated_at": "2025-11-05 15:15:10"
+  },
+  {
+    "name": "17341726186",
+    "username": "17341726186",
+    "password": "Ff529719",
+    "is_head": 1,
+    "requiredPeriod": 2,
+    "remark": "",
+    "updated_at": "2025-11-06 12:41:33"
   },
   {
     "name": "18783363361",
@@ -334,14 +344,15 @@
     "requiredPeriod": 2,
     "remark": "",
     "updated_at": "2025-11-05 12:43:00"
-  },{
+  },
+  {
     "name": "13419076678",
     "username": "13419076678",
     "password": "810412wgH",
     "is_head": 0,
-    "requiredPeriod": 0,
+    "requiredPeriod": 2,
     "remark": "",
-    "updated_at": "2025-11-05 12:43:00"
+    "updated_at": "2025-11-06 12:24:29"
   },
   {
     "name": "13778839913",
@@ -360,6 +371,15 @@
     "requiredPeriod": 2,
     "remark": "",
     "updated_at": "2025-11-05 13:38:43"
+  },
+  {
+    "name": "18090077522",
+    "username": "18090077522",
+    "password": "Fnxx123456",
+    "is_head": 1,
+    "requiredPeriod": 2,
+    "remark": "",
+    "updated_at": "2025-11-06 15:00:17"
   },
   {
     "name": "15282324126",

@@ -1,6 +1,6 @@
 {
-  "max_task_num": 1,
-  "max_course_num": 8,
+  "max_task_num": 5,
+  "max_course_num": 32,
   "chapterId_list": {
     "1983723413983899648": [
       0,
@@ -8,24 +8,715 @@
     ],
     "1985277519445798912": [
       2,
-      3
-    ],
-    "1985638406501347328": [
+      3,
       4,
       5,
       6,
       7
+    ],
+    "1985638406501347328": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "1986358583622807552": [
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27
+    ],
+    "1986362193115000832": [
+      28,
+      29,
+      30,
+      31
     ]
   },
   "data": [
+    {
+      "name": "13981366603",
+      "username": "13981366603",
+      "password": "Ll147258",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "updated_at": "2025-11-15 11:15:41"
+    },
+    {
+      "name": "18080602366",
+      "username": "18080602366",
+      "password": "Ll147258",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "updated_at": "2025-11-15 11:16:01"
+    },
+    {
+      "name": "18080602348",
+      "username": "18080602348",
+      "password": "Ll147258",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "updated_at": "2025-11-15 11:16:16"
+    },
+    {
+      "name": "13679644177",
+      "username": "13679644177",
+      "password": "Xsy_147258369",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "徐思源",
+      "updated_at": "2025-11-15 11:16:22"
+    },
+    {
+      "name": "13890688046",
+      "username": "13890688046",
+      "password": "Ll147258",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "陈治安",
+      "updated_at": "2025-11-15 11:16:55"
+    },
+    {
+      "name": "18080602367",
+      "username": "18080602367",
+      "password": "Ll147258",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "范晓文",
+      "updated_at": "2025-11-15 11:16:36"
+    },
+    {
+      "name": "18781336833",
+      "username": "18781336833",
+      "password": "YJL93171hy",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "余嘉丽",
+      "updated_at": "2025-11-15 11:16:42"
+    },
+    {
+      "name": "18284340207",
+      "username": "18284340207",
+      "password": "Hjm199708@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:16:50"
+    },
+    {
+      "name": "15892819175",
+      "username": "15892819175",
+      "password": "A067785woaiwan",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:16:56"
+    },
+    {
+      "name": "17341726186",
+      "username": "17341726186",
+      "password": "Ff529719",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:17:10"
+    },
+    {
+      "name": "18783363361",
+      "username": "18783363361",
+      "password": "ZTzt1219089650",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "周婷",
+      "updated_at": "2025-11-15 11:17:16"
+    },
+    {
+      "name": "18384708567",
+      "username": "18384708567",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "张琪君",
+      "updated_at": "2025-11-15 11:20:18"
+    },
+    {
+      "name": "13378354796",
+      "username": "13378354796",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:17:29"
+    },
+    {
+      "name": "15183318006",
+      "username": "15183318006",
+      "password": "Fnxx124578",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:17:30"
+    },
+    {
+      "name": "18090060545",
+      "username": "18090060545",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:17:45"
+    },
+    {
+      "name": "13778832903",
+      "username": "13778832903",
+      "password": "Chen0712",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:17:50"
+    },
+    {
+      "name": "13795509554",
+      "username": "13795509554",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:04"
+    },
+    {
+      "name": "15884341518",
+      "username": "15884341518",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:05"
+    },
+    {
+      "name": "18990322662",
+      "username": "18990322662",
+      "password": "Yjf@90807060",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:20"
+    },
+    {
+      "name": "13982801769",
+      "username": "13982801769",
+      "password": "Lxb729295@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:25"
+    },
+    {
+      "name": "18215604763",
+      "username": "18215604763",
+      "password": "Fnxx123456@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:21:34"
+    },
+    {
+      "name": "13990355642",
+      "username": "13990355642",
+      "password": "FNxx13579",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:39"
+    },
+    {
+      "name": "15182231165",
+      "username": "15182231165",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:55"
+    },
+    {
+      "name": "18090067075",
+      "username": "18090067075",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:18:59"
+    },
+    {
+      "name": "15282339270",
+      "username": "15282339270",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:19:13"
+    },
+    {
+      "name": "18728325705",
+      "username": "18728325705",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:19:47"
+    },
+    {
+      "name": "13990328300",
+      "username": "13990328300",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:19:34"
+    },
+    {
+      "name": "18090465575",
+      "username": "18090465575",
+      "password": "Fnxx123456@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:19:48"
+    },
+    {
+      "name": "18090077289",
+      "username": "18090077289",
+      "password": "Brc196718",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:08"
+    },
+    {
+      "name": "15182249409",
+      "username": "15182249409",
+      "password": "Fnxx9409",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:21"
+    },
+    {
+      "name": "13568253671",
+      "username": "13568253671",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:22"
+    },
+    {
+      "name": "13890387859",
+      "username": "13890387859",
+      "password": "Fnxx124578+",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:43"
+    },
+    {
+      "name": "13778802507",
+      "username": "13778802507",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:53"
+    },
+    {
+      "name": "13696082636",
+      "username": "13696082636",
+      "password": "Wqs369118@!",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:55"
+    },
+    {
+      "name": "18728379768",
+      "username": "18728379768",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:20:56"
+    },
+    {
+      "name": "13548237769",
+      "username": "13548237769",
+      "password": "Lh820916",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:21:18"
+    },
+    {
+      "name": "13778826032",
+      "username": "13778826032",
+      "password": "FNxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:21:27"
+    },
+    {
+      "name": "18980369616",
+      "username": "18980369616",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:21:30"
+    },
+    {
+      "name": "18381457998",
+      "username": "18381457998",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:21:31"
+    },
+    {
+      "name": "18080398918",
+      "username": "18080398918",
+      "password": "Xujie9661089",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:21:52"
+    },
+    {
+      "name": "13419076678",
+      "username": "13419076678",
+      "password": "810412wgH",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 13:03:39"
+    },
+    {
+      "name": "13778839913",
+      "username": "13778839913",
+      "password": "Hanxiao139?",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:23:02"
+    },
+    {
+      "name": "13778889248",
+      "username": "13778889248",
+      "password": "FNxx!@12",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:22:05"
+    },
+    {
+      "name": "18090077522",
+      "username": "18090077522",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:22:28"
+    },
+    {
+      "name": "15282324126",
+      "username": "15282324126",
+      "password": "Fnxx123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:22:27"
+    },
+    {
+      "name": "13320952300",
+      "username": "13320952300",
+      "password": "Zsj13579?",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-12 13:12:25"
+    },
     {
       "name": "15892719990",
       "username": "15892719990",
       "password": "Yj123456",
       "is_head": 1,
-      "requiredPeriod": 0,
+      "requiredPeriod": 32,
       "remark": "",
-      "updated_at": "2025-11-05 17:05:50"
+      "updated_at": "2025-11-15 11:22:40"
+    },
+    {
+      "name": "13558551739",
+      "username": "13558551739",
+      "password": "Ld13558551739",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:23:01"
+    },
+    {
+      "name": "18040433828",
+      "username": "18040433828",
+      "password": "Mqy123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 11:23:02"
+    },
+    {
+      "name": "13308132851",
+      "username": "13308132851",
+      "password": "Lxz654321@123",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 13:53:28"
+    },
+    {
+      "name": "15983368088",
+      "username": "15983368088",
+      "password": "Aa15983368088",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 13:51:04"
+    },
+    {
+      "name": "18090356131",
+      "username": "18090356131",
+      "password": "Aa18090356131",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 13:53:12"
+    },
+    {
+      "name": "17766086782",
+      "username": "17766086782",
+      "password": "Aa17766086782",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 13:53:58"
+    },
+    {
+      "name": "18381395636",
+      "username": "18381395636",
+      "password": "Sn18381395636.",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-12 22:09:56"
+    },
+    {
+      "name": "1643379003",
+      "username": "1643379003",
+      "password": "2wsx+2WSX",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-13 18:37:46"
+    },
+    {
+      "name": "18628998777",
+      "username": "18628998777",
+      "password": "131452081399Aaa",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-13 19:21:40"
+    },
+    {
+      "name": "18328193982",
+      "username": "18328193982",
+      "password": "1995Licaiyu@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-12 23:47:37"
+    },
+    {
+      "name": "18228512993",
+      "username": "18228512993",
+      "password": "Cyh123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-13 09:59:19"
+    },
+    {
+      "name": "13890640183",
+      "username": "13890640183",
+      "password": "Wsy19811023@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-13 23:06:49"
+    },
+    {
+      "name": "13408245536",
+      "username": "13408245536",
+      "password": "Lsy52526@",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-13 22:13:34"
+    },
+    {
+      "name": "18113431968",
+      "username": "18113431968",
+      "password": "Aa18113431968",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 00:16:49"
+    },
+    {
+      "name": "13778309069",
+      "username": "13778309069",
+      "password": "Lcs291920",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-14 20:07:01"
+    },
+    {
+      "name": "13608163023",
+      "username": "13608163023",
+      "password": "Szxx@123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-14 05:46:59"
+    },
+    {
+      "name": "13540522958",
+      "username": "13540522958",
+      "password": "Pydfml1227.",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-14 07:45:50"
+    },
+    {
+      "name": "15700368576",
+      "username": "15700368576",
+      "password": "Yjr102266",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-14 17:51:42"
+    },
+    {
+      "name": "17721908614",
+      "username": "17721908614",
+      "password": "Zy17721908614",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-14 18:16:57"
+    },
+    {
+      "name": "13350705408",
+      "username": "13350705408",
+      "password": "Zxm123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 01:02:44"
+    },
+    {
+      "name": "18381175360",
+      "username": "18381175360",
+      "password": "Bgf123456",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-14 22:22:31"
+    },
+    {
+      "name": "13008151661",
+      "username": "13008151661",
+      "password": "Xyzsdmn123",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 21:01:08"
+    },
+    {
+      "name": "18380442322",
+      "username": "18380442322",
+      "password": "Xyp18380442322",
+      "is_head": 1,
+      "requiredPeriod": 2,
+      "remark": "",
+      "updated_at": "2025-11-08 11:11:30"
+    },
+    {
+      "name": "18090462086",
+      "username": "18090462086",
+      "password": "Kk13547685520",
+      "is_head": 1,
+      "requiredPeriod": 2,
+      "remark": "",
+      "updated_at": "2025-11-08 11:11:30"
+    },
+    {
+      "name": "17628410830",
+      "username": "17628410830",
+      "password": "001128Aa",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 01:54:19"
+    },
+    {
+      "name": "19140187989",
+      "username": "19140187989",
+      "password": "Ly19140187989",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 03:23:44"
+    },
+    {
+      "name": "18383313866",
+      "username": "18383313866",
+      "password": "LIxia18383313866",
+      "is_head": 1,
+      "requiredPeriod": 32,
+      "remark": "",
+      "updated_at": "2025-11-15 06:21:31"
+    },
+    {
+      "name": "13778876475",
+      "username": "13778876475",
+      "password": "Szxx@8109",
+      "is_head": 1,
+      "requiredPeriod": 2,
+      "remark": "",
+      "updated_at": "2025-11-08 11:11:30"
     }
   ]
 }

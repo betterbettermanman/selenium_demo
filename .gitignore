@@ -13,3 +13,8 @@ logs/*
 /jeecg-boot-module-admin/logs/
 /jeecg-boot-module-system/logs/
 chromedriver.exe
+*.log
+dist/
+build/
+data/
+png/

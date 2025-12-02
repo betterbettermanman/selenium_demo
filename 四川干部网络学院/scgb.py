@@ -82,6 +82,7 @@ def recognize_verify_code(image_path=None, image_url=None):
         return None
 
 
+# 从url中提取id
 def extract_id_from_url(url):
     # 解析 URL 结构
     parsed_url = urlparse(url)
@@ -193,7 +194,8 @@ class TeacherTrainingChecker:
         self.username = username
         self.password = password
         self.current_course_id = ""
-        self.is_running = True
+        # 是否运行 0：未运行，1：运行中，2：接受验证码
+        self.is_running = "0"
         self.headers = {
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1',
@@ -261,7 +263,7 @@ class TeacherTrainingChecker:
             return False
 
     def open_home(self):
-        if not self.is_running:
+        if not self.is_running == "1":
             return
         # 判断是否有固定课程集合
         if self.courses:
@@ -269,7 +271,7 @@ class TeacherTrainingChecker:
             if not course:
                 logger.info("课程已全部学完")
                 self.is_complete = True
-                self.is_running = False
+                self.is_running = "0"
                 return
             base_url = "https://web.scgb.gov.cn/#/index"
             self.driver.get(f"{base_url}")
@@ -332,7 +334,7 @@ class TeacherTrainingChecker:
                 # 可以选择返回 False 结束，或返回 True 继续（根据你的业务逻辑）
                 # 这里假设失败后不再继续，结束任务
                 self.is_complete = False
-                self.is_running = False
+                self.is_running = "0"
                 return False  # 或者 return True，视情况而定
 
         # 理论上不会执行到这里，为了代码完整性
@@ -521,7 +523,7 @@ class TeacherTrainingChecker:
                     else:
                         logger.info(f"{self.nickName} 选修和必修已全部学完，结束课程")
                         self.is_complete = True
-                        self.is_running = False
+                        self.is_running = "0"
                         return False
 
                 except requests.exceptions.RequestException as e:
@@ -541,7 +543,7 @@ class TeacherTrainingChecker:
                     # 可以选择返回 False 结束，或返回 True 继续（根据你的业务逻辑）
                     # 这里假设失败后不再继续，结束任务
                     self.is_complete = False
-                    self.is_running = False
+                    self.is_running = "0"
                     return False  # 或者 return True，视情况而定
 
             # 理论上不会执行到这里，为了代码完整性
@@ -577,17 +579,17 @@ class TeacherTrainingChecker:
         logger.info(f"{self.nickName}开始检验课程是否完成")
         sleep_time = 10
         call_login = False
-        while self.is_running:
+        while self.is_running == "1":
             # 检验登陆状态是否失效，如果失效，退出当前课程
             if not self.check_login_status():
                 logger.info(
                     f"{self.nickName}检验登陆状态是否失效，如果失效，退出当前课程检验登陆状态是否失效，如果失效，退出当前课程")
                 self.is_login = False
-                self.is_running = False
+                self.is_running = "0"
             # id为空超过10次循环，关闭当前线程 ，重启一个
             if self.null_course_id_num >= 10:
                 logger.info(f"{self.nickName}id为空超过10次循环，关闭当前线程 ，重启一个")
-                self.is_running = False
+                self.is_running = "0"
             if self.error_cursor_id_num == 2:
                 logger.error(f"{self.nickName}错误播放超过数超过6次，将当前课程放入不播放列表")
                 task = ScgbTask.query.get_or_404(self.id)
@@ -630,7 +632,7 @@ class TeacherTrainingChecker:
                 if course_detail.status_code == 401:
                     logger.info("登陆过期，退出运行")
                     self.is_login = False
-                    self.is_running = False
+                    self.is_running = "0"
                     continue
                 detail_json = course_detail.json()["result"]
                 # logger.info(f"{self.nickName}的【{self.current_course_id}】课程详情: {detail_json}")
@@ -654,7 +656,7 @@ class TeacherTrainingChecker:
                         sleep_time = 40
                     else:
                         logger.info("已全部观看完成，退出程序")
-                        self.is_running = False
+                        self.is_running = "0"
                         break
                 else:
                     logger.info(f"{self.nickName}的【{self.current_course_id}】未观看完成")
@@ -755,6 +757,7 @@ class TeacherTrainingChecker:
                         f"已登录:{store_json['session']['nickName']}【{store_json['session']['organName']}】")
                     self.nickName = store_json['session']['nickName']
                     self.is_login = True
+                    self.is_running = "1"
                     return "2", ""
                 else:
                     logger.warning("未登录，请输入验证码进行登录")
@@ -790,6 +793,8 @@ class TeacherTrainingChecker:
                 # 获取验证码（假设self.get_formdata_img_src能正确识别验证码）
                 captcha = self.get_formdata_img_src(driver1=self.driver)
                 logger.info(f"{self.username}第{retry_count + 1}次尝试，识别验证码: {captcha}")
+                if not captcha:
+                    captcha="123456"
                 capture_input.send_keys(captcha)
 
                 # 点击登录按钮
@@ -844,6 +849,7 @@ class TeacherTrainingChecker:
                 except Exception:
                     # 未出现提示框，视为登录成功
                     logger.info(f"{self.username} 登录成功,接受手机验证码")
+                    self.is_running = "2"
                     return "1", "登录成功,接受手机验证码"
 
             except ElementNotInteractableException:
@@ -887,6 +893,7 @@ class TeacherTrainingChecker:
                     self.nickName = store_json['session']['nickName']
                     self.organName = store_json['session']['organName']
                     self.is_login = True
+                    self.is_running = "1"
                     # 更新名称到数据库中
                     return True, ""
                 else:
@@ -945,7 +952,7 @@ class TeacherTrainingChecker:
         # 启动线程
         thread = threading.Thread(target=thread_target)
         thread.start()
-        while self.is_running:
+        while self.is_running == "1":
             time.sleep(1)
 
         # 判断token过期，或者异常推出的情况
@@ -958,6 +965,9 @@ class TeacherTrainingChecker:
             # self.driver.get("")
         else:
             logger.info(f"{self.nickName}异常停止")
+            # 打开首页，刷新登录页面
+            self.driver.get("https://web.scgb.gov.cn/#/index")
+            time.sleep(10)
         self.driver.close()
 
     def close_model(self):
@@ -1033,7 +1043,7 @@ class TeacherTrainingChecker:
             # 1. 获取 element 下直接子级 span 的文本值
             try:
                 # 使用 XPath 定位直接子级 span（./ 表示当前元素的直接子元素）
-                direct_span = element.find_element(By.XPATH, "./span")
+                direct_span = element.find_element(By.TAG_NAME, "span")
                 # 获取 span 的文本值（strip() 去除首尾空白字符）
                 span_text = direct_span.text.strip()
                 logger.info(f"直接子级 span 的值：{span_text}")
@@ -1057,5 +1067,5 @@ class TeacherTrainingChecker:
 
     def close_browser(self):
         logger.info(f"{self.username}开始关闭浏览器")
-        self.is_running = False
+        self.is_running = "0"
         self.driver.quit()

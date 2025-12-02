@@ -72,8 +72,10 @@ def get_task_page():
 
     for task in tasks:
         if task.username in running_tasks:
-            if running_tasks[task.username].is_running:
+            if running_tasks[task.username].is_running == "1":
                 task.is_running = "1"
+            elif running_tasks[task.username].is_running == "2":
+                task.is_running = "2"
             else:
                 task.is_running = "0"
         else:
@@ -266,6 +268,13 @@ def restart_task():
     # 判断当前任务是否完成，完成状态不可继续执行
     if current_task.status == "2":
         return jsonify({'code': 500, 'msg': '任务已完成'})
+    # 判断当前用户是否正在接受验证码
+    if running_tasks.__contains__(current_task.username):
+        logger.info("当前浏览器已启动")
+        if running_tasks[current_task.username].is_running == "1":
+            return jsonify({'code': 500, 'msg': '当前任务正在运行中'})
+        elif running_tasks[current_task.username].is_running == "2":
+            return jsonify({'code': 200, 'msg': '任务创建成功，接受手机验证码', 'data': {"status": "0"}})
 
     check = TeacherTrainingChecker(current_task.id, current_task.username, current_task.password,
                                    isHead=current_task.is_head,
@@ -513,4 +522,4 @@ scheduler.start()
 
 # 运行应用
 if __name__ == '__main__':
-    app.run(host="0.0.0.0")
+    app.run(host="0.0.0.0",port=5002)

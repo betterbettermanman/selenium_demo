@@ -7,8 +7,8 @@ def create_app():
     app = Flask(__name__)
     # 配置数据库连接
     # 格式: mysql+pymysql://用户名:密码@主机:端口/数据库名
-    encoded_password = url_quote("WHATwin1688@%^=,.")
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://root:{encoded_password}@111.229.144.57:10003/test-play-video'
+    encoded_password = url_quote("123456")
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://root:{encoded_password}@127.0.0.1:3306/test-play-video'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # 禁用事件系统以节省开销
 
     # 配置连接池 (可选但推荐)

@@ -149,7 +149,7 @@ def continue_task():
             logger.info(f"当前容器{task_contain}包含当前任务：{row['username']}")
             continue
         # 判断是否执行完成
-        if int(row['requiredPeriod']) == max_course_num:
+        if int(row['requiredPeriod']) >= max_course_num:
             logger.info(f"{row['username']}已播放完成")
             continue
         complete_status = False
@@ -158,7 +158,7 @@ def continue_task():
         thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
         thread.start()  # 启动线程
         task_contain.append(row['username'])
-        time.sleep(10)
+        time.sleep(20)
     if complete_status:
         logger.info(f"✅✅✅✅✅✅✅✅✅任务已全部完成！✅✅✅✅✅✅✅✅✅")
 
@@ -221,23 +221,16 @@ class TeacherTrainingChecker:
     def open_home(self):
         if self.is_complete:
             return
-        logger.info(f"{self.user_data_dir}进行学习")
         logger.info(
             f"{self.user_data_dir}打开首页，检测视频学习情况")
         url = "https://basic.sc.smartedu.cn/hd/teacherTraining/coursedatail?courseId=1983723370145034240"
         self.driver.get(url)
-        time.sleep(10)
+        time.sleep(15)
         divs = self.driver.find_elements(By.CLASS_NAME, "course-list-cell")
         required_period = 0
         if len(divs) == 0:
             logger.info(f"{self.user_data_dir}获取页面失败，重新打开首页")
-            jwtToken = self.get_cookies_values("Teaching_Autonomic_Learning_Token")
-            if jwtToken:
-                threading.Thread(target=self.open_home, daemon=True).start()
-                return
-            else:
-                threading.Thread(target=self.sss, daemon=True).start()
-                return
+            return
         for index, div in enumerate(divs):
             required_period = required_period + 1
             try:
@@ -250,7 +243,13 @@ class TeacherTrainingChecker:
                     video = WebDriverWait(self.driver, 20).until(
                         EC.element_to_be_clickable((By.ID, 'video'))
                     )
-                    self.driver.execute_script("arguments[0].play();", video)
+                    is_paused = True
+                    while is_paused:
+                        self.driver.execute_script("arguments[0].play();", video)
+                        is_paused = self.is_video_paused(video)
+                        logger.info(f"暂停状态：{is_paused}")
+                        time.sleep(5)
+
                     logger.info(f"{self.user_data_dir}开始播放")
                     # 从url中提取course_id
                     self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
@@ -269,7 +268,12 @@ class TeacherTrainingChecker:
                 video = WebDriverWait(self.driver, 10).until(
                     EC.element_to_be_clickable((By.ID, 'video'))
                 )
-                self.driver.execute_script("arguments[0].play();", video)
+                is_paused = True
+                while is_paused:
+                    self.driver.execute_script("arguments[0].play();", video)
+                    is_paused = self.is_video_paused(video)
+                    logger.info(f"暂停状态：{is_paused}")
+                    time.sleep(5)
                 logger.info("开始播放")
                 # 从url中提取course_id
                 self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
@@ -284,51 +288,85 @@ class TeacherTrainingChecker:
         update_data(self.username, requiredPeriod=required_period)
         self.is_complete = True
 
+    # 判断是否结束
+    def is_video_paused(self, video_element):
+        return self.driver.execute_script("return arguments[0].paused;", video_element)
+
     def sss(self):
         self.is_login()
         self.open_home()
 
     def check_course_success(self):
         sleep_time = 10
+        retry_num = 0
         while not self.is_complete:
+            # if retry_num == 3:
+            #     logger.info("三次检测进度相同，重新打开页面")
+            #     threading.Thread(target=self.open_home, daemon=True).start()
+            #     time.sleep(30)
+            #     retry_num = 0
+            #     continue
             check_play_success_url = f"https://basic.sc.smartedu.cn/hd/teacherTraining/api/studyCourseUser/chapterProcess?chapterId={self.chapterId}"
             logger.info(f"{self.user_data_dir}检测课程id: {self.current_course_id}")
-            if self.current_course_id != "":
-                try:
-                    course_detail = requests.get(check_play_success_url, headers=self.headers)
-                    # 可以打印完整的URL来验证
-                    logger.info(f"{self.user_data_dir}完整请求URL: {course_detail.url}")
-                    detail_json = course_detail.json()["returnData"]["studySubsectionUsers"]
-                    logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
-                    for detail in detail_json:
-                        if self.current_course_id == detail["subsectionId"]:
+            # if self.current_course_id != "":
+            try:
+                course_detail = requests.get(check_play_success_url, headers=self.headers)
+                # 可以打印完整的URL来验证
+                logger.info(f"{self.user_data_dir}完整请求URL: {course_detail.url}")
+                detail_json = course_detail.json()["returnData"]["studySubsectionUsers"]
+                # logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
+                for detail in detail_json:
+                    if self.current_course_id == detail["subsectionId"]:
+                        if int(detail["schedule"]) >= 100:
+                            logger.info(
+                                f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，继续播放下一个视频")
+                            threading.Thread(target=self.open_home, daemon=True).start()
+                            sleep_time = 30
+                        else:
+                            # 判断当前进度值，与上一次是否相等，如果相等，就说明，播放异常，点击播放按钮
+                            if self.schedule == int(detail["schedule"]):
+                                self.retry_play()
+                                # retry_num = retry_num + 1
+                            # 当前视频未播放完成，间隔5-10分钟继续检测
+                            logger.info(
+                                f"{self.user_data_dir}的【{self.current_course_id}】未观看完成，进度：{detail['schedule']}")
+                            sleep_time = random.randint(150, 300)
 
-                            if int(detail["schedule"]) >= 100:
-                                logger.info(
-                                    f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，继续播放下一个视频")
-                                threading.Thread(target=self.open_home, daemon=True).start()
-                            else:
-                                # 判断当前进度值，与上一次是否相等，如果相等，就说明，播放异常，重新打开
-                                if self.schedule == int(detail["schedule"]):
-                                    logger.info("两次进度一致，播放异常，重新打开")
-                                    threading.Thread(target=self.open_home, daemon=True).start()
-
-                                # 当前视频未播放完成，间隔5-10分钟继续检测
-                                logger.info(
-                                    f"{self.user_data_dir}的【{self.current_course_id}】未观看完成，进度：{detail['schedule']}")
-                                sleep_time = random.randint(150, 300)
-
-                except TimeoutException:
-                    logger.error("链接超时")
-                    continue
-                except Exception as e:
-                    logger.error(f"{self.user_data_dir}检测课程状态失败: {str(e)}，可能登陆失效，进行登录检测")
-                    self.is_login()
-                    sleep_time = 20
-            else:
-                sleep_time = 30
+                        self.schedule = int(detail["schedule"])
+            except TimeoutException:
+                logger.error("链接超时")
+                continue
+            except Exception as e:
+                logger.error(f"{self.user_data_dir}检测课程状态失败: {str(e)}，可能登陆失效，进行登录检测")
+                jwtToken = self.get_cookies_values("Teaching_Autonomic_Learning_Token")
+                if jwtToken:
+                    self.retry_play()
+                else:
+                    threading.Thread(target=self.open_home, daemon=True).start()
+                sleep_time = 20
+            # else:
+            #     sleep_time = 30
             logger.info(f"{self.user_data_dir}间隔{sleep_time}秒，继续检测")
             time.sleep(sleep_time)
+
+    def retry_play(self):
+        max_retries = 5
+        retry_count = 0
+        # 点击播放按钮
+        try:
+            video = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.ID, 'video'))
+            )
+            while max_retries > retry_count:
+                self.driver.execute_script("arguments[0].play();", video)
+                is_paused = self.is_video_paused(video)
+                logger.info(f"{self.user_data_dir}暂停状态：{is_paused}")
+                if not is_paused:
+                    break
+                time.sleep(5)
+                retry_count += 1
+        except Exception as e:
+            logger.info(f"{self.user_data_dir}重播异常不处理")
 
     def init_browser(self):
         logger.info(f"{self.user_data_dir}开始初始化浏览器文件夹")
@@ -356,7 +394,6 @@ class TeacherTrainingChecker:
 
     def is_login(self):
         while True:
-            time.sleep(5)
             # 检查登录状态
             jwtToken = self.get_cookies_values("Teaching_Autonomic_Learning_Token")
 
@@ -367,6 +404,7 @@ class TeacherTrainingChecker:
             else:
                 logger.warning(f"{self.user_data_dir}未登录，请登录")
             self.auto_login()
+            time.sleep(10)
 
     def auto_login(self):
         try:
