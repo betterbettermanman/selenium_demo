@@ -17,4 +17,6 @@ chromedriver.exe
 dist/
 build/
 data/
+logs/
 png/
+*.spec
