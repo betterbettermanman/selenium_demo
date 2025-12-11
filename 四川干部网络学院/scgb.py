@@ -746,6 +746,16 @@ class TeacherTrainingChecker:
     # -------------------------------------------------------
     def check_login(self):
         self.driver.get("https://web.scgb.gov.cn/#/index")
+        # 检测是否有公告
+        try:
+            notice = WebDriverWait(self.driver, 2).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, 'close'))
+            )
+            if notice and notice.is_displayed():
+                notice.click()
+            time.sleep(1)
+        except TimeoutException:
+            logger.info("---")
         # 检查登录状态
         store = self.get_local_storage_value("store", self.driver)
         if store:
@@ -794,7 +804,7 @@ class TeacherTrainingChecker:
                 captcha = self.get_formdata_img_src(driver1=self.driver)
                 logger.info(f"{self.username}第{retry_count + 1}次尝试，识别验证码: {captcha}")
                 if not captcha:
-                    captcha="123456"
+                    captcha = "123456"
                 capture_input.send_keys(captcha)
 
                 # 点击登录按钮
