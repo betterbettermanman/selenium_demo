@@ -38,7 +38,7 @@
           </template>
           <template v-else-if="cell.key==='is_running'">
             <div :class="[item[cell.key] === '0' ? 'tag-danger' : 'tag-success']" class="tag">
-              {{ item[cell.key] === '0' ? '未运行' : '运行中' }}
+              {{ item[cell.key] === '1'? '运行中': item[cell.key] === '2'? '验证码': '未运行' }}
             </div>
           </template>
           <template v-else-if="cell.key==='status'">
