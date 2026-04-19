@@ -224,7 +224,8 @@ def force_restart_task():
             # 2. 手动推送应用上下文（关键步骤）
             with app.app_context():
                 # 3. 执行核心任务（此时已在上下文内，可正常操作数据库）
-                check.exec_main()
+                # 根据不同类型，执行不同的业务逻辑
+                check.exec_main2()
 
         # 启动线程
         thread = threading.Thread(target=thread_target)
@@ -292,7 +293,7 @@ def restart_task():
             # 2. 手动推送应用上下文（关键步骤）
             with app.app_context():
                 # 3. 执行核心任务（此时已在上下文内，可正常操作数据库）
-                check.exec_main()
+                check.exec_main2()
 
         # 启动线程
         thread = threading.Thread(target=thread_target)
@@ -522,4 +523,4 @@ scheduler.start()
 
 # 运行应用
 if __name__ == '__main__':
-    app.run(host="0.0.0.0",port=5002)
+    app.run(host="0.0.0.0", port=5002)

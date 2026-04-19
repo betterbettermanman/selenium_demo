@@ -980,6 +980,69 @@ class TeacherTrainingChecker:
             time.sleep(10)
         self.driver.close()
 
+    # 中国干部
+    def exec_main2(self):
+        course_list = [
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=d6d710e41c21403cb6b2681e06414071&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=0c1e50460f664acdb0cb35df27c8c622&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=9899995bdded48a8a73c27a3e84d7c33&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=e4a2b3764791450ba2fe290293086321&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=1c01d3dab0324c86ab1d28b0a570f96c&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=8d4345b95e5a447ba1a5424a614cf343&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=448969a5dc774d04bf411c7cf7be7188&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=e4c0b118b32040babe7cfb653b60cdbd&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb",
+            "https://cela.e-celap.cn/page.html#/pc/nc/pagecourse/coursePlayer?id=5228f334fc24463fa251d4d0f8fdc741&classid=0318a246a8a84125b6a5660e6898adc4&type=ztb"
+        ]
+
+        # 循环处理每个课程
+        for course in course_list:
+            print(f"开始处理课程：{course}")
+            self.driver.get(course)
+            time.sleep(3)  # 页面加载等待
+
+            # 循环检查进度直到100%
+            while True:
+                try:
+                    # 1. 获取进度：class=el-progress__text
+                    progress_elem = self.driver.find_element(By.CLASS_NAME, "el-progress__text")
+                    progress_text = progress_elem.text.strip()
+                    print(f"当前课程进度：{progress_text}")
+
+                    # 2. 完成判断
+                    if progress_text == "100%":
+                        print("✅ 课程已完成，进入下一个")
+                        break
+
+                    # 3. 未完成 → 点击【你提供的精准播放按钮】
+                    print("▶ 未完成，点击播放按钮")
+                    try:
+                        # 根据你提供的元素定位播放按钮（最精准）
+                        play_button = self.driver.find_element(
+                            By.CSS_SELECTOR,
+                            "div.emiya-video-control-backdrop.pointer-events-auto"
+                        )
+                        play_button.click()
+                    except NoSuchElementException:
+                        print("⚠️ 未找到播放按钮，可能已在播放")
+
+                    # 4. 等待1分钟再次检查
+                    print("⏰ 等待60秒后重新检查...")
+                    time.sleep(60)
+
+                except NoSuchElementException:
+                    print("⚠️ 未找到进度元素，页面加载中，等待3秒重试")
+                    time.sleep(3)
+                except Exception as e:
+                    print(f"❌ 异常：{str(e)}，等待5秒重试")
+                    time.sleep(5)
+
+        print("🎉 所有课程全部自动播放完成！")
+        logger.info(f"{self.nickName}视频已全部播放完成")
+        task = ScgbTask.query.get_or_404(self.id)
+        task.status = "2"
+        db.session.commit()
+        self.driver.close()
+
     def close_model(self):
         # 关闭提示框
         visible_modal = None
