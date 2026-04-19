@@ -143,9 +143,9 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
 
 # 添加容器，一次最多运行15个，然后动态检测，是否运行完成，运行完成，重新添加进去
 task_contain = []
-max_task_num = 5
+max_task_num = 10
 # todo 需要动态修改的
-target_num = 2
+target_num = 7
 
 
 def continue_task():
@@ -962,7 +962,7 @@ class TeacherTrainingChecker:
 
         # 设置 Chrome 浏览器选项
         chrome_options = Options()
-        if self.is_headless:
+        if not self.is_headless:
             chrome_options.add_argument("--headless")  # 无头模式，不显示浏览器窗口
         chrome_options.add_argument(f"--user-data-dir={user_data_dir}")  # 保存用户数据
         chrome_options.add_argument("--disable-gpu")
