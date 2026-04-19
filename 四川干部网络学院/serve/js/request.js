@@ -1,4 +1,4 @@
-const baseUrl = `/api`
+const baseUrl = `http://127.0.0.1:5002/api`
 
 export function request(method, url, data = null, headers = {}) {
   return new Promise((resolve, reject) => {
