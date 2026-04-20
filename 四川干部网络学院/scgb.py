@@ -1043,6 +1043,218 @@ class TeacherTrainingChecker:
         db.session.commit()
         self.driver.close()
 
+    def exec_main3(self):
+        # 点击中国干部按钮，进行登录,并切换到当前页面
+        try:
+            print("点击：中国干部网络学院")
+            child_div1 = self.driver.find_element(By.XPATH, '//span[text()="中国干部网络学院"]')
+            self.switch_page(child_div1)
+            time.sleep(5)
+        except Exception as e:
+            print(f"未找到 中国干部网络学院 按钮，跳过，错误：{e}")
+
+        # 打开课程目标页面
+        course_label = self.driver.find_element(By.XPATH, '//label[text()="树立和践行正确政绩观学习教育网上专题班"]')
+        self.switch_page(course_label)
+        time.sleep(5)
+
+        # 循环打开课程列表，判断是否播放完成
+        # 你的目标链接
+        course_url = "https://cela.e-celap.cn/page.html#/pc/nc/pagespecial/specialDetail?id=0318a246a8a84125b6a5660e6898adc4"
+
+        # ===================== 外层循环：直到所有课程都完成才退出 =====================
+        while True:
+            # 1. 新建标签页并打开链接
+            self.driver.execute_script(f"window.open('{course_url}');")
+
+            # 2. 关闭原来的标签页（第一个标签）
+            # self.driver.close()
+            time.sleep(3)
+
+            # 3. 切换到新打开的标签页（必须加，否则焦点不在新页面）
+            self.driver.switch_to.window(self.driver.window_handles[-1])
+
+            # 判断是否有【报名】按钮，有就点击，没有跳过
+            try:
+                # 查找 报名 按钮
+                apply_btn = self.driver.find_element(By.XPATH, '//div[@class="btn" and text()=" 报名 "]')
+                if apply_btn.is_displayed():  # 确保可见再点击
+                    print("✅ 找到报名按钮，点击报名")
+                    apply_btn.click()
+                    time.sleep(2)
+            except NoSuchElementException:
+                print("ℹ️ 页面未找到报名按钮，跳过")
+
+            # 无论是否报名，最终都点击【课程】tab
+            try:
+                course_tab = self.driver.find_element(By.XPATH, '//span[contains(text()," 课程 ")]')
+                course_tab.click()
+                print("✅ 已切换到【课程】页面")
+                time.sleep(2)
+            except NoSuchElementException:
+                print("⚠️ 未找到课程标签页")
+
+            import re  # 正则提取百分比
+
+            # ===================== 遍历 detail_desc_item，判断进度并点击 =====================
+            video_flag = False
+            try:
+                detail_items = self.driver.find_elements(By.CLASS_NAME, "detail_desc_item")
+                total = len(detail_items)
+                print(f"\n📊 找到课程卡片总数：{total}")
+
+                for i, item in enumerate(detail_items):
+                    text = item.text.strip()
+                    print(f"\n--- 第 {i + 1} 个课程 ---")
+                    print(text)
+
+                    # 1. 用正则提取最后一行的百分比（匹配 xx%）
+                    match = re.search(r'(\d+)%', text)
+                    if match:
+                        progress = int(match.group(1))  # 转为数字：0, 50, 100
+                        print(f"→ 学习进度：{progress}%")
+
+                        # 2. 判断：没学完就点击
+                        if progress < 100:
+                            print(f"✅ 进度不足100%，点击课程卡片并打开新标签页")
+                            # 点击（会新开标签）
+                            # 获取当前 item 下的所有直接子 div，并点击第三个
+                            child_divs = item.find_elements(By.XPATH, "./div")
+                            if len(child_divs) >= 3:
+                                third_div = child_divs[2]  # 第三个，索引从0开始
+                                self.switch_page(third_div)  # 点击并新开页面
+                                time.sleep(3)
+
+                            video_flag = True
+                            break  # 只处理第一个未完成；去掉break则全部依次处理
+
+                    else:
+                        print("⚠️ 未找到进度百分比")
+
+            except Exception as e:
+                print(f"遍历课程异常：{str(e)}")
+
+            # 如果本轮没有找到任何未完成的课程，直接退出整个大循环
+            if not video_flag:
+                print("\n🎉 所有课程均已完成 100%！自动退出循环")
+                break
+            time.sleep(3)
+            # 循环检查进度直到100%
+            while True:
+                try:
+                    # 1. 获取进度：class=el-progress__text
+                    progress_elem = self.driver.find_element(By.CLASS_NAME, "el-progress__text")
+                    progress_text = progress_elem.text.strip()
+                    print(f"当前课程进度：{progress_text}")
+
+                    # 2. 完成判断
+                    if progress_text == "100%":
+                        print("✅ 课程已完成，关闭视频页，返回课程列表继续检查")
+                        break
+
+                    # 3. 未完成 → 点击【你提供的精准播放按钮】
+                    print("▶ 未完成，点击播放按钮")
+                    try:
+                        # 根据你提供的元素定位播放按钮（最精准）
+                        play_button = self.driver.find_element(
+                            By.CSS_SELECTOR,
+                            "div.emiya-video-control-backdrop.pointer-events-auto"
+                        )
+                        play_button.click()
+                    except NoSuchElementException:
+                        print("⚠️ 未找到播放按钮，可能已在播放")
+
+                    # 4. 等待1分钟再次检查
+                    print("⏰ 等待60秒后重新检查...")
+                    time.sleep(60)
+
+                except NoSuchElementException:
+                    print("⚠️ 未找到进度元素，页面加载中，等待3秒重试")
+                    time.sleep(3)
+                except Exception as e:
+                    print(f"❌ 异常：{str(e)}，等待5秒重试")
+                    time.sleep(5)
+
+        print("🎉 所有课程全部自动播放完成！")
+        logger.info(f"{self.nickName}视频已全部播放完成")
+        task = ScgbTask.query.get_or_404(self.id)
+        task.status = "2"
+        db.session.commit()
+        self.driver.close()
+
+    def switch_page(self, child_div):
+        try:
+            # 记录点击前的窗口
+            handles_before = self.driver.window_handles
+            original_handle = self.driver.current_window_handle
+
+            # 点击
+            child_div.click()
+            print("点击成功，等待新窗口打开...")
+
+            # 等待新窗口出现
+            WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(len(handles_before) + 1))
+
+            # 获取新窗口
+            all_handles = self.driver.window_handles
+            new_handle = [h for h in all_handles if h not in handles_before][0]
+
+            # ===================== 核心修复 =====================
+            # 1. 先切换到新窗口
+            self.driver.switch_to.window(new_handle)
+            print(f"已切换到新窗口：{self.driver.current_url}")
+
+            # 2. 关闭原来的旧窗口（不会影响当前操作）
+            # try:
+            #     self.driver.switch_to.window(original_handle)
+            #     self.driver.close()
+            # except NoSuchWindowException:
+            #     print("原窗口已关闭，跳过关闭操作")
+
+            # 3. 再次确保停留在新窗口
+            self.driver.switch_to.window(new_handle)
+            print("窗口切换完成 ✅")
+
+        except Exception as e:
+            print(f"switch_page 异常：{str(e)}")
+
+    def switch_page_close(self, child_div):
+        try:
+            # 记录点击前的所有窗口
+            handles_before = self.driver.window_handles
+            original_handle = self.driver.current_window_handle
+
+            # 点击课程，打开新标签
+            child_div.click()
+            print("点击成功，等待新窗口打开...")
+
+            # 等待新窗口出现
+            WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(len(handles_before) + 1))
+
+            # 获取最新打开的窗口
+            all_handles = self.driver.window_handles
+            new_handle = [h for h in all_handles if h not in handles_before][0]
+
+            # ===================== 核心功能：只保留新页面，关闭其他所有 =====================
+            # 1. 切换到新页面
+            self.driver.switch_to.window(new_handle)
+
+            # 2. 遍历所有旧页面，全部关闭
+            for handle in handles_before:
+                try:
+                    self.driver.switch_to.window(handle)
+                    self.driver.close()
+                except:
+                    pass
+
+            # 3. 最终切回新页面（现在浏览器里只有这一个页面了）
+            self.driver.switch_to.window(new_handle)
+
+            print(f"✅ 已关闭所有旧页面，当前仅保留：{self.driver.current_url}")
+
+        except Exception as e:
+            print(f"switch_page_close 异常：{str(e)}")
+
     def close_model(self):
         # 关闭提示框
         visible_modal = None

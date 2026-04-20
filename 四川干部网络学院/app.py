@@ -293,7 +293,7 @@ def restart_task():
             # 2. 手动推送应用上下文（关键步骤）
             with app.app_context():
                 # 3. 执行核心任务（此时已在上下文内，可正常操作数据库）
-                check.exec_main2()
+                check.exec_main3()
 
         # 启动线程
         thread = threading.Thread(target=thread_target)
