@@ -1140,6 +1140,9 @@ class TeacherTrainingChecker:
                 break
             time.sleep(3)
             # 循环检查进度直到100%
+            # 加一个标记，记录是否已经检测到 100%
+            progress_100_found = False
+
             while True:
                 try:
                     # 1. 获取进度：class=el-progress__text
@@ -1147,22 +1150,36 @@ class TeacherTrainingChecker:
                     progress_text = progress_elem.text.strip()
                     print(f"当前课程进度：{progress_text}")
 
-                    # 2. 完成判断
+                    # 2. 完成判断（修改这里）
                     if progress_text == "100%":
-                        print("✅ 课程已完成，关闭视频页，返回课程列表继续检查")
-                        break
+                        if not progress_100_found:
+                            # 第一次发现 100%，标记一下，再等一轮
+                            print("✅ 第一次检测到 100%，等待一轮后再次确认...")
+                            progress_100_found = True
+                        else:
+                            # 第二次确认 100%，才真正退出
+                            print("✅ 第二次确认 100%，课程已完成，关闭视频页，返回课程列表")
+                            # 关闭当前窗口 + 切回上一个窗口
+                            self.driver.close()
+                            all_windows = self.driver.window_handles
+                            self.driver.switch_to.window(all_windows[-1])
+                            break
 
-                    # 3. 未完成 → 点击【你提供的精准播放按钮】
-                    print("▶ 未完成，点击播放按钮")
-                    try:
-                        # 根据你提供的元素定位播放按钮（最精准）
-                        play_button = self.driver.find_element(
-                            By.CSS_SELECTOR,
-                            "div.emiya-video-control-backdrop.pointer-events-auto"
-                        )
-                        play_button.click()
-                    except NoSuchElementException:
-                        print("⚠️ 未找到播放按钮，可能已在播放")
+                    else:
+                        # 只要不是 100%，就重置标记
+                        progress_100_found = False
+
+                        # 3. 未完成 → 点击【你提供的精准播放按钮】
+                        print("▶ 未完成，点击播放按钮")
+                        try:
+                            # 根据你提供的元素定位播放按钮（最精准）
+                            play_button = self.driver.find_element(
+                                By.CSS_SELECTOR,
+                                "div.emiya-video-control-backdrop.pointer-events-auto"
+                            )
+                            play_button.click()
+                        except NoSuchElementException:
+                            print("⚠️ 未找到播放按钮，可能已在播放")
 
                     # 4. 等待1分钟再次检查
                     print("⏰ 等待60秒后重新检查...")
