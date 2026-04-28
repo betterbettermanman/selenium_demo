@@ -1273,5 +1273,14 @@
     "requiredPeriod": 7,
     "remark": "",
     "updated_at": "2026-04-18 21:38:33"
+  },
+  {
+    "name": "17738361390",
+    "username": "17738361390",
+    "password": "wani520AN",
+    "is_head": 1,
+    "requiredPeriod": 0,
+    "remark": "",
+    "updated_at": "2026-04-18 21:38:33"
   }
 ]
