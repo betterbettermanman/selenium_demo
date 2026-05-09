@@ -159,7 +159,7 @@ def compare_hours_str(hours_str):
     return is_equal
 
 
-def open_init_browser(username):
+def open_browser1(username):
     logger.info(f"{username}开始初始化浏览器文件夹")
     # 创建保存用户数据的目录
     user_data_dir = os.path.join(os.getcwd(), "data", username)
@@ -750,8 +750,11 @@ class TeacherTrainingChecker:
         chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--window-size=1920,1080")
 
-        # 自动下载匹配当前 Chrome 的驱动（镜像优先，失败回退官方源）
-        service = Service(install_chromedriver_path())
+        # 指定 ChromeDriver 的路径
+        chromedriver_path = "chromedriver.exe"
+
+        # 使用 Service 类来指定驱动路径
+        service = Service(chromedriver_path)
 
         # 初始化 Chrome 浏览器驱动
         driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -1150,10 +1153,48 @@ class TeacherTrainingChecker:
 
         print("🎉 所有课程全部自动播放完成！")
         logger.info(f"{self.nickName}视频已全部播放完成")
-        task = ScgbTask.query.get_or_404(self.id)
-        task.status = "2"
-        db.session.commit()
-        self.driver.close()
+        # task = ScgbTask.query.get_or_404(self.id)
+        # task.status = "2"
+        # db.session.commit()
+        # self.driver.close()
+
+        # #开始考试
+        # # 1. 新建标签页并打开链接
+        # time.sleep(2)
+        # self.driver.execute_script(f"window.open('{course_url}');")
+        #
+        # # 无论是否报名，最终都点击【课程】tab
+        # try:
+        #     course_tab = self.driver.find_element(By.XPATH, '//span[contains(text()," 结业 ")]')
+        #     course_tab.click()
+        #     logger.info("✅ 已切换到【课程】页面")
+        #     time.sleep(2)
+        # except NoSuchElementException:
+        #     logger.info("⚠️ 未找到课程标签页")
+        #
+        # element = self.driver.find_element(By.XPATH, "//span[@class='txt' and text()='开始考试']")
+        # element.click()
+        #
+        # # 获取所有窗口句柄
+        # all_windows = self.driver.window_handles
+        #
+        # # 切换到最新打开的标签页（最后一个窗口句柄）
+        # new_window = all_windows[-1]
+        # self.driver.switch_to.window(new_window)
+        #
+        # # 获取复选框元素
+        # checkbox = self.driver.find_element(By.ID, "checkbox")
+        #
+        # # 检查当前是否已选中
+        # if not checkbox.is_selected():
+        #     checkbox.click()
+        #     print("复选框已勾选")
+        # else:
+        #     print("复选框已经是勾选状态")
+        #
+        # # 通过链接文本定位
+        # element = self.driver.find_element(By.LINK_TEXT, "已确认，去考试")
+        # element.click()
 
     def switch_page(self, child_div):
         try:

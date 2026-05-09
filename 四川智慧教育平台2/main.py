@@ -143,9 +143,9 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
 
 # 添加容器，一次最多运行15个，然后动态检测，是否运行完成，运行完成，重新添加进去
 task_contain = []
-max_task_num = 10
+max_task_num = 5
 # todo 需要动态修改的
-target_num = 7
+target_num = 8
 
 
 def continue_task():

@@ -8,7 +8,7 @@ from flask_cors import CORS  # 导入 CORS
 from loguru import logger
 
 from models import db, ScgbTask, ScgbCourse  # 导入 db 实例和模型
-from scgb import TeacherTrainingChecker, open_init_browser, remove_browser_dir
+from scgb import TeacherTrainingChecker, open_browser1, remove_browser_dir
 from server import create_app
 
 app = create_app()
@@ -458,7 +458,7 @@ def open_browser():
             return jsonify({'code': 500, 'msg': f'缺少必要字段: {field}'})
     id = data['id']
     current_task = ScgbTask.query.get_or_404(id)
-    thread = threading.Thread(target=open_init_browser, args=[current_task.username])
+    thread = threading.Thread(target=open_browser1, args=[current_task.username])
     thread.start()
     # open_init_browser(current_task.username)
 
