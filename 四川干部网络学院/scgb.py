@@ -969,6 +969,7 @@ class TeacherTrainingChecker:
             logger.error(f"获取验证码图片失败: {str(e)}")
         return ""
 
+    # 四川干部
     def exec_main(self):
         # 等待验证码
         self.check_study_time2()
@@ -1006,7 +1007,7 @@ class TeacherTrainingChecker:
             time.sleep(10)
         self.driver.close()
 
-    # 中国干部
+    # 中国干部 - 树立和践行正确政绩观学习教育网上专题班
     def exec_main3(self):
         # 点击中国干部按钮，进行登录,并切换到当前页面
         try:
@@ -1153,48 +1154,161 @@ class TeacherTrainingChecker:
 
         print("🎉 所有课程全部自动播放完成！")
         logger.info(f"{self.nickName}视频已全部播放完成")
-        # task = ScgbTask.query.get_or_404(self.id)
-        # task.status = "2"
-        # db.session.commit()
-        # self.driver.close()
 
-        # #开始考试
-        # # 1. 新建标签页并打开链接
-        # time.sleep(2)
-        # self.driver.execute_script(f"window.open('{course_url}');")
-        #
-        # # 无论是否报名，最终都点击【课程】tab
-        # try:
-        #     course_tab = self.driver.find_element(By.XPATH, '//span[contains(text()," 结业 ")]')
-        #     course_tab.click()
-        #     logger.info("✅ 已切换到【课程】页面")
-        #     time.sleep(2)
-        # except NoSuchElementException:
-        #     logger.info("⚠️ 未找到课程标签页")
-        #
-        # element = self.driver.find_element(By.XPATH, "//span[@class='txt' and text()='开始考试']")
-        # element.click()
-        #
-        # # 获取所有窗口句柄
-        # all_windows = self.driver.window_handles
-        #
-        # # 切换到最新打开的标签页（最后一个窗口句柄）
-        # new_window = all_windows[-1]
-        # self.driver.switch_to.window(new_window)
-        #
-        # # 获取复选框元素
-        # checkbox = self.driver.find_element(By.ID, "checkbox")
-        #
-        # # 检查当前是否已选中
-        # if not checkbox.is_selected():
-        #     checkbox.click()
-        #     print("复选框已勾选")
-        # else:
-        #     print("复选框已经是勾选状态")
-        #
-        # # 通过链接文本定位
-        # element = self.driver.find_element(By.LINK_TEXT, "已确认，去考试")
-        # element.click()
+    # 中国干部 -全国两会
+    def exec_main4(self):
+        print("全国两会")
+        # 点击中国干部按钮，进行登录,并切换到当前页面
+        try:
+            logger.info("点击：中国干部网络学院")
+            child_div1 = self.driver.find_element(By.XPATH, '//span[text()="中国干部网络学院"]')
+            self.switch_page(child_div1)
+            time.sleep(5)
+        except Exception as e:
+            logger.info(f"未找到 中国干部网络学院 按钮，跳过，错误：{e}")
+
+        # 打开课程目标页面
+        course_label = self.driver.find_element(By.XPATH, '//label[text()="“2026年全国两会精神解读”专栏 "]')
+        self.switch_page(course_label)
+        time.sleep(5)
+
+        # 循环打开课程列表，判断是否播放完成
+        # 你的目标链接
+        course_url = "https://cela.gwypx.com.cn/pcPage/subjectColumnDetail?id=3806606815458768370"
+
+        # ===================== 外层循环：直到所有课程都完成才退出 =====================
+        while True:
+            # 1. 新建标签页并打开链接
+            time.sleep(2)
+            self.driver.execute_script(f"window.open('{course_url}');")
+            time.sleep(5)
+            self.driver.switch_to.window(self.driver.window_handles[-1])
+
+            import re  # 正则提取百分比
+
+            # ===================== 遍历 detail_desc_item，判断进度并点击 =====================
+            video_flag = False
+            current_index = 0
+            try:
+                detail_items = self.driver.find_elements(By.CSS_SELECTOR, ".class-card.gestures")
+                total = len(detail_items)
+                logger.info(f"📊 找到课程卡片总数：{total}")
+
+                for i, item in enumerate(detail_items):
+                    text = item.text.strip()
+                    print(f"\n--- 第 {i + 1} 个课程 ---")
+                    print(text)
+
+                    # 1. 用正则提取最后一行的百分比（匹配 xx%）
+                    match = re.search(r'已学习', text)
+                    if match:
+                        print("学习状态：已学习")
+                    else:
+                        logger.info(f"✅ 进度不足100%，点击课程卡片并打开新标签页")
+                        # 点击（会新开标签）
+                        self.switch_page(item)  # 点击并新开页面
+                        current_index = i
+                        time.sleep(3)
+                        video_flag = True
+                        break  # 只处理第一个未完成；去掉break则全部依次处理
+
+
+            except Exception as e:
+                logger.info(f"遍历课程异常：{str(e)}")
+
+            # 如果本轮没有找到任何未完成的课程，直接退出整个大循环
+            if not video_flag:
+                logger.info("\n🎉 所有课程均已完成 100%！自动退出循环")
+                break
+            time.sleep(3)
+            # 循环检查进度直到100%
+
+
+
+            while True:
+                # 检测是否有弹框
+                self.handle_learning_dialog(self.driver)
+                try:
+                    # 1. 获取进度：class=el-progress__text
+                    progress_elem = self.driver.find_element(By.CLASS_NAME, "el-progress__text")
+                    progress_text = progress_elem.text.strip()
+                    logger.info(f"当前课程进度：{progress_text}")
+
+                    # 2. 完成判断（修改这里）
+                    if progress_text == "100%":
+                        # 确认 100%，才真正退出
+                        logger.info("✅ 确认 100%，课程已完成，间隔400秒，然后关闭视频页，返回课程列表")
+                        # 关闭当前窗口 + 切回上一个窗口
+                        if current_index == 1:
+                            time.sleep(600)
+                        else:
+                            time.sleep(400)
+                        self.driver.close()
+                        all_windows = self.driver.window_handles
+                        self.driver.switch_to.window(all_windows[-1])
+                        break
+
+                    else:
+                        # 只要不是 100%，就重置标记
+                        # 3. 未完成 → 点击【你提供的精准播放按钮】
+                        logger.info("▶ 未完成，点击播放按钮")
+                        try:
+                            # 根据你提供的元素定位播放按钮（最精准）
+                            play_button = self.driver.find_element(
+                                By.CSS_SELECTOR,
+                                ".vjs-big-play-button"
+                            )
+                            # 检查元素是否启用且可见
+                            if play_button.is_enabled() and play_button.is_displayed():
+                                play_button.click()
+                                print("播放按钮已点击")
+                            else:
+                                print("播放按钮当前不可点击")
+                        except NoSuchElementException:
+                            logger.info("⚠️ 未找到播放按钮，可能已在播放")
+
+                    # 4. 等待1分钟再次检查
+                    logger.info("⏰ 等待60秒后重新检查...")
+                    time.sleep(10)
+
+                except NoSuchElementException:
+                    print("⚠️ 未找到进度元素，页面加载中，等待3秒重试")
+                    time.sleep(3)
+                except Exception as e:
+                    print(f"❌ 异常：{str(e)}，等待5秒重试")
+                    time.sleep(5)
+
+        print("🎉 所有课程全部自动播放完成！")
+        logger.info(f"{self.nickName}视频已全部播放完成")
+
+    def handle_learning_dialog(self,driver, timeout=3):
+        """
+        检测并处理"是否学习"弹框
+        :param driver: webdriver实例
+        :param timeout: 等待弹框出现的最长时间（秒）
+        :return: True 如果点击了"是"，False 如果没有弹框或处理失败
+        """
+        try:
+            # 等待弹框出现（等待包含提示文本的元素）
+            dialog = WebDriverWait(driver, timeout).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//div[contains(@class, 'el-message-box')]//p[contains(text(), '当前课程未学习')]"))
+            )
+
+            # 找到弹框中的"是"按钮并点击
+            yes_button = driver.find_element(By.XPATH,
+                                             "//div[contains(@class, 'el-message-box__btns')]//button[contains(., '是')]")
+            yes_button.click()
+            print("检测到未学习弹框，已点击'是'")
+            return True
+
+        except TimeoutException:
+            # 超时说明没有弹框，正常继续
+            print("未检测到学习弹框，继续执行")
+            return False
+        except Exception as e:
+            print(f"处理弹框时出错: {e}")
+            return False
 
     def switch_page(self, child_div):
         try:

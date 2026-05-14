@@ -410,17 +410,25 @@ class TeacherTrainingChecker:
         try:
             logger.info(f"{self.user_data_dir}开始自动登录")
             self.driver.get(
-                "https://basic.sc.smartedu.cn/ThirdPortalService/user/otherlogin!login.ac?appkey=C56DA16ECBC56FBEEC908DA09E45C72C917A80118F057FA1F0B5BAE41CC9CC9DECD5BDB7133FE17C328C5D37B37CA8E7&pkey=5D79CA42E45C5273DF8532D09E1F158B15E25919CDB958940F84D5E63F5F53A1ECD5BDB7133FE17C328C5D37B37CA8E7&params=718F83A5347CBFDB7D1A9065FA090FE949D92330BB9A3351FE0715C5B8A3E86F37916C1004E835C7C7F964E3F301477F7D37F04485FA8707845DAAA23356236ED1D326CF5A5E3C263470516EE9B4A2ED")
+                "https://www.scxfks.com/study/login")
             time.sleep(2)
-
+            # 点击使用账号密码登录
+            try:
+                # 等待元素可点击，然后点击
+                login_btn = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.LINK_TEXT, "使用账号登录"))
+                )
+                login_btn.click()
+            except Exception as e:
+                print(f"点击失败: {e}")
             username_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.ID, 'loginName'))
+                EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='mobile']"))
             )
             username_input.clear()
             username_input.send_keys(self.username)
 
             password_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.ID, 'password'))
+                EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='password']"))
             )
             password_input.send_keys(self.password)
 
@@ -449,7 +457,7 @@ class TeacherTrainingChecker:
         global task_contain
         self.init_browser()
         # 判断用户是否登录
-        self.is_login()
+        self.auto_login()
         self.open_home()
         threading.Thread(target=self.check_course_success, daemon=True).start()
         # threading.Thread(target=self.check_course_play_status, daemon=True).start()

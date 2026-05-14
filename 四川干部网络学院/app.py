@@ -292,8 +292,14 @@ def restart_task():
 
             # 2. 手动推送应用上下文（关键步骤）
             with app.app_context():
+                # 根据不同的课程类型，走不通的执行逻辑
                 # 3. 执行核心任务（此时已在上下文内，可正常操作数据库）
-                check.exec_main3()
+                if "AAAAAA" == current_task.class_id:
+                    check.exec_main3()
+                elif "BBBBBB" == current_task.class_id:
+                    check.exec_main4()
+                else:
+                    check.exec_main()
 
         # 启动线程
         thread = threading.Thread(target=thread_target)

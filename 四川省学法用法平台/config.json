@@ -47,11 +47,11 @@
   },
   "data": [
     {
-      "name": "15881862362",
-      "username": "15881862362",
+      "name": "17628011438",
+      "username": "17628011438",
       "password": "xfks1234",
       "is_head": 1,
-      "requiredPeriod": 100,
+      "requiredPeriod": 0,
       "updated_at": "2025-11-15 11:15:41"
     }
   ]

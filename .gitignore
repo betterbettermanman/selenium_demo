@@ -20,3 +20,5 @@ data/
 logs/
 png/
 *.spec
+
+.claude/**
