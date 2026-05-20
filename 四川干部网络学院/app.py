@@ -155,7 +155,7 @@ def create_task():
         new_task = ScgbTask(
             username=data['username'],
             password=data['password'],  # 生产环境建议加密存储
-            is_head='0',  # 确保是字符串
+            is_head='1',  # 确保是字符串
             no_play_videos=[],  # 可选字段
             status=data.get('status', '1')  # 默认为“未完成”
         )
