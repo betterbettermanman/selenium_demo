@@ -484,6 +484,7 @@ class TeacherTrainingChecker:
                 ).click()
                 break
 
+            time.sleep(10)
             original_window = self.driver.current_window_handle  # 记录原始标签页句柄
             # 等待新标签页打开（最多等待10秒）
             WebDriverWait(self.driver, 10).until(
@@ -496,7 +497,7 @@ class TeacherTrainingChecker:
                     self.driver.switch_to.window(window_handle)
                     print("已切换到新标签页")
                     break
-            time.sleep(2)
+
             # 在新标签页中操作元素（示例：获取页面标题和某个元素）
             # print(f"新标签页标题: {self.driver.title}")
             course_list_div2 = self.driver.find_element(By.CSS_SELECTOR, 'div.course-catalog.m0')
@@ -512,7 +513,7 @@ class TeacherTrainingChecker:
 
                 a_values[1].click()
                 break
-            time.sleep(2)
+            time.sleep(10)
             # 记录当前窗口句柄（第一个新标签页）
             first_new_window_handle = self.driver.current_window_handle
             # 切换到最新打开的标签页
@@ -544,7 +545,7 @@ class TeacherTrainingChecker:
 
             # 切换到iframe上下文
             self.driver.switch_to.frame(iframe_element)
-            logger.info("成功切换到目标iframe")
+            logger.info("成功切换到目标iframe2")
             # 这里可以添加对第二个新标签页的操作 pausecenterchehhidfompc
             required_div = WebDriverWait(self.driver, 10).until(
                 EC.visibility_of_element_located((
@@ -757,6 +758,8 @@ class TeacherTrainingChecker:
                     "trainplanId": self.trainplanId,
                     "platformId": self.platformId,
                 }
+                logger.info(params)
+                logger.info(self.headers)
                 try:
                     course_detail = requests.get(check_play_success_url, headers=self.headers,
                                                  params=params)
