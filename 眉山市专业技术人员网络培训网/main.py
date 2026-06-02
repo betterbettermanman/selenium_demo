@@ -150,7 +150,7 @@ def continue_task():
         # 判断是否执行完成
         if row['status'] != '2':
             check = TeacherTrainingChecker(row['name'], row['username'], row['password'],
-                                           row['is_head'], row['start_index'], row['no_play_videos'])
+                                           row['is_head'], row['start_index'], row['no_play_videos'], row['video_name'])
             thread = threading.Thread(target=check.exec_main)  # 注意这里没有()
             thread.start()  # 启动线程
             time.sleep(10)
@@ -264,7 +264,7 @@ def extract_id_from_url(url):
         return None  # 没有查询参数
 
     query_string = hash_part[
-                   query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
+        query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
 
     # 解析查询参数为字典
     query_params = parse_qs(query_string)
@@ -308,7 +308,7 @@ def compare_hours_str(hours_str):
 
 
 class TeacherTrainingChecker:
-    def __init__(self, name, username, password, isHead, current_video_url_index, no_play_videos=None):
+    def __init__(self, name, username, password, isHead, current_video_url_index, no_play_videos=None, video_name=None):
         """
         初始化教师培训课程检查器（使用外部传入的浏览器实例）
 
@@ -333,7 +333,7 @@ class TeacherTrainingChecker:
             'Connection': 'keep-alive',
             "hrttoken": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJPcmdhbklkIjoiMDE5ODMxMDAtZGI1Ni03MWNjLWI2NGQtNmY4NGQwYWM3MGQwIiwiQ2xpZW50VHlwZSI6IiIsIk9yZ2FuTmFtZSI6IuWvjOeJm-Wwj-WtpiIsIkFzc2Vzc1R5cGUiOjAsIlVzZXJJZCI6IjAxOTgzYzdmLTMxZWItN2I0NC1hNzRmLWZhZTRiYjliNmI3YiIsIk9yZ2FuUGF0aCI6IjJjNTUxYTczLTViNDEtMTFlZC05NTFhLTBjOWQ5MjY1MDRmMyxjMWJmNjBjNS01YjQxLTExZWQtOTUxYS0wYzlkOTI2NTA0ZjMsMDE4YTQ1YmMtZWVmNi03NzFmLTkzZGEtMzU2NDIyYzRkNTAyLGNkNGFlNWI0LTQxOTctNGUzNC1iNGVmLWNiMmVkNzg4YzNmYiwwMThjYWFhMy1lZDMzLTdkNDAtYmFhMy1iZjRlYTU3NzQ2ZTAsMDE5ODI2NDAtY2Y0YS03ZmQ1LWFiNDMtNzk4M2VmMDJiNmYwLDAxOTgzMTAwLWRiNTYtNzFjYy1iNjRkLTZmODRkMGFjNzBkMCIsImV4cCI6MTc1MzQ2MzE2MCwidXNlcm5hbWUiOiI3YTE1ZTZmNjNlYzM5YmM5In0.oQd_HlYVRr2_vC3U2DP31Vw62oYOgOLgWFD8n9KoEnI"
         }
-        self.video_name = "眉山2024年度数字经济与驱动发展"
+        self.video_name = video_name
         self.current_video_url_index = current_video_url_index
         # 默认检测时间，当时间重复3次，说明观看异常，重新打开页面进行观看
         self.sleep_time = 10
@@ -415,7 +415,7 @@ class TeacherTrainingChecker:
         )
 
         # 存储所有找到的dt元素
-        sss = "眉山2024年度数字经济与驱动发展"
+        # sss = "眉山市2026年度专业技术人员继续教育公需科目"
         current_course = ""
         # 遍历每个父元素，查找其下的所有dt标签
         for parent in parent_elements:
@@ -431,7 +431,7 @@ class TeacherTrainingChecker:
             is_return = False
             for value in span_values:
                 logger.info(value)
-                if value == sss:
+                if value == self.video_name:
                     current_course = parent
                     is_return = True
             if is_return:
@@ -442,7 +442,7 @@ class TeacherTrainingChecker:
 
         # 如果不为已学100%，找到去学习按钮，进行学习
         if "已学100%" != video_process[0].text:
-            learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去学习' or .= '去学习']")
+            learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去学习' or .= '去学习' or text()='继续学习']")
             learn_elements.click()
             logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
             self.open_course()
