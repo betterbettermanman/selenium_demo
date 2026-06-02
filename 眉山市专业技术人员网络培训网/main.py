@@ -264,7 +264,7 @@ def extract_id_from_url(url):
         return None  # 没有查询参数
 
     query_string = hash_part[
-        query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
+                   query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
 
     # 解析查询参数为字典
     query_params = parse_qs(query_string)
@@ -368,37 +368,6 @@ class TeacherTrainingChecker:
             logger.error(f"获取localStorage值失败: {str(e)}")
             return None
 
-    def get_source_compulsory_elective(self):
-        """获取必修和选修进度"""
-        # 打开个人中心，检测未结业班级列表
-        self.driver.get("https://web.scgb.gov.cn/#/personal")
-        time.sleep(10)
-
-        try:
-            # 等待包含class为num-info的div元素加载完成
-            num_info_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "num-info"))
-            )
-
-            # 获取该div下所有的span元素
-            span_elements = num_info_div.find_elements(By.TAG_NAME, "span")
-
-            # 提取所有span元素的文本值
-            span_values = [span.text for span in span_elements if span.text.strip()]
-
-            # 打印结果
-            return span_values[2] == "100%", span_values[5] == "100%"
-        except Exception as e:
-            logger.error("获取比选失败")
-
-    def play_specify_video(self):
-        if self.specify_video:
-            for video in self.specify_video:
-                self.driver.get(video["url"])
-                self.current_course_id = video["course_id"]
-                return True
-        return False
-
     def open_home(self):
         if self.is_complete:
             return
@@ -415,7 +384,6 @@ class TeacherTrainingChecker:
         )
 
         # 存储所有找到的dt元素
-        # sss = "眉山市2026年度专业技术人员继续教育公需科目"
         current_course = ""
         # 遍历每个父元素，查找其下的所有dt标签
         for parent in parent_elements:
@@ -439,14 +407,32 @@ class TeacherTrainingChecker:
         # 开始判断是否完成课程
         column_wrap = current_course.find_element(By.CLASS_NAME, "column-wrap")
         video_process = column_wrap.find_elements(By.CLASS_NAME, "el-progress__text")
+        # 如果不为已学100%，找到去激活按钮，进行激活
+        # 如果不是已学100%
+        if video_process and "已学100%" != video_process[0].text:
+            # 优先处理去激活
+            try:
+                activate_btn = column_wrap.find_element(By.XPATH, ".//button[contains(text(), '去激活')]")
+                activate_btn.click()
+                logger.info("激活课程")
+                # todo 如果有啥额外操作，都可以在这里实现
+                time.sleep(5)
+                self.open_home()
+                return "course"
+            except NoSuchElementException:
+                logger.info("当前课程无去激活按钮，检查是否需要学习")
 
-        # 如果不为已学100%，找到去学习按钮，进行学习
-        if "已学100%" != video_process[0].text:
-            learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去学习' or .= '去学习' or text()='继续学习']")
-            learn_elements.click()
-            logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
-            self.open_course()
-            return "course"
+            # 处理去学习/继续学习
+            try:
+                learn_btn = column_wrap.find_element(By.XPATH,
+                                                     ".//button[contains(text(), '去学习') or contains(text(), '继续学习')]")
+                learn_btn.click()
+                logger.info("打开课程，获取课程列表，判断每个课程列表是否完成")
+                self.open_course()
+                return "course"
+            except NoSuchElementException:
+                logger.warning("当前课程没有可操作的按钮")
+                return "course"
         # 如果不为已考100%，找到去考试按钮，进行考试
         if "已考100%" != video_process[1].text:
             learn_elements = column_wrap.find_element(By.XPATH, ".//button[.//text()='去考试' or .= '去考试']")
@@ -725,133 +711,6 @@ class TeacherTrainingChecker:
             return unquote(match.group(1))
         return None
 
-    def open_home2(self):
-        try:
-            logger.info(f"{self.user_data_dir}进行必修学习")
-            # 必修
-            self.driver.get("https://web.scgb.gov.cn/#/myClass?id=019815fe-ec44-753d-9b1d-554f017df106&collected=1")
-            time.sleep(5)
-            # 等待包含class为num-info的div元素加载完成
-
-            required_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((
-                    By.XPATH,
-                    "//div[@class='item' and text()=' 必修 ']"
-                ))
-            )
-            required_div.click()
-            time.sleep(5)
-            is_next_page = self.judge_is_next_page2()
-            while is_next_page:
-                # 如果不存在，检查是否只存在"ivu-page-next"类的元素
-                try:
-                    element = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "ivu-page-next"))
-                    )
-                    logger.info(f"{self.user_data_dir}存在 下一页 的元素，点击")
-                    element.click()
-                    time.sleep(2)
-                    is_next_page = self.judge_is_next_page2()
-                except Exception as e:
-                    logger.error("两个类名的元素都不存在")
-
-        except TimeoutException:
-            print("超时：未找到class为'course-list'的元素")
-        except Exception as e:
-            print(f"发生错误：{str(e)}")
-
-    def judge_is_next_page2(self):
-        logger.info(f"{self.user_data_dir}判断是否有可以播放的视频")
-        required_div = WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((
-                By.CLASS_NAME,
-                "course-list"
-            ))
-        )
-        # 获取必修列表，然后进行播放
-        direct_child_divs = required_div.find_elements(
-            By.XPATH, "./div"  # 注意开头的点表示当前节点（required_div）
-        )
-        # 遍历每个子级div
-        for index, child_div in enumerate(direct_child_divs, 1):
-            try:
-                # 获取当前子div中所有的span标签
-                span_elements = child_div.find_elements(By.TAG_NAME, "span")
-
-                if span_elements:
-                    # print(f"第{index}个div内的span标签值：")
-                    if not compare_hours_str(span_elements[3].text.strip()):
-                        # 确保元素可点击后再点击
-                        WebDriverWait(self.driver, 5).until(
-                            EC.element_to_be_clickable(child_div)
-                        )
-
-                        # 记录当前所有标签页句柄（点击前）
-                        handles_before_click = self.driver.window_handles
-
-                        # 点击a标签打开新页面
-                        child_div.click()
-
-                        WebDriverWait(self.driver, 10).until(
-                            EC.number_of_windows_to_be(len(handles_before_click) + 1))
-
-                        # 获取所有标签页句柄（点击后）
-                        all_handles = self.driver.window_handles
-
-                        # 找到新打开的标签页句柄
-                        new_handle = [h for h in all_handles if h not in handles_before_click][0]
-
-                        # 切换到新标签页以获取URL
-                        self.driver.switch_to.window(new_handle)
-                        new_page_url = self.driver.current_url
-
-                        # 检查cursor_id是否为目标值（这里假设目标值是"special_cursor_id"）
-                        if extract_id_from_url(new_page_url) in self.no_play_videos:
-                            # 如果是目标cursor_id，关闭新页面
-                            self.driver.close()
-                            logger.info(f"{self.user_data_dir}检测到目标cursor_id，已关闭新页面")
-
-                            # 切换回原来的页面
-                            self.driver.switch_to.window(handles_before_click[0])
-                            continue
-
-                        # 如果不是目标cursor_id，继续处理
-                        # 关闭之前的标签页（除了新打开的页面）
-                        for handle in all_handles:
-                            if handle != new_handle:
-                                self.driver.switch_to.window(handle)
-                                self.driver.close()
-                                logger.debug(f"已关闭标签页: {handle}")
-
-                        # 切换到新打开的标签页
-                        self.driver.switch_to.window(new_handle)
-                        logger.debug(f"{self.user_data_dir}已切换到新标签页: {new_handle}")
-                        # 解析课程ID
-                        self.current_course_id = extract_id_from_url(new_page_url)
-                        logger.info(f"{self.user_data_dir}当前课程ID: {self.current_course_id}")
-                        return False  # 找到未播放视频，返回False停止翻页
-
-            except Exception as e:
-                print(f"处理第{index}个div时出错：{str(e)}\n")
-
-        logger.info(f"{self.user_data_dir}未找到需要播放的视频，点击下一页")
-        return True  # 所有视频已完成，返回True继续翻页
-
-    def check_study_time(self):
-        logger.info(f"{self.user_data_dir}判断当前学习任务是否大于50学时")
-        url = "https://api.scgb.gov.cn/api/services/app/class/app/getStudyProcess"
-        try:
-            response = requests.get(url=url, headers=self.headers)
-            response_json = response.json()
-            logger.info(f"{self.user_data_dir}当前已学习时长: {response_json['result']['timesSum']}")
-            if int(response_json['result']['timesSum']) > 100:
-                return False
-            else:
-                return True
-        except Exception as e:
-            logger.error(f"{self.user_data_dir}获取学习时长失败: {str(e)}")
-            return True
-
     def send_check_result(self, requiredPeriod, electivePeriod, mentioned_list=None, mentioned_mobile_list=None):
         update_data(self.username, requiredPeriod=requiredPeriod, electivePeriod=electivePeriod)
         content = self.user_data_dir + "：必修:" + requiredPeriod + ";选修:" + electivePeriod
@@ -877,108 +736,6 @@ class TeacherTrainingChecker:
                 logger.info("发送成功")
         except Exception as e:
             logger.error(f"请求异常：{str(e)}")
-
-    def check_study_time2(self):
-        logger.info(f"{self.user_data_dir}判断当前学习任务选修和必修是否完成")
-        url = "https://api.scgb.gov.cn/api/services/app/class/app/getClassDetailByUserId?classId=019815fe-ec44-753d-9b1d-554f017df106"
-        try:
-            response = requests.get(url=url, headers=self.headers)
-            response_json = response.json()
-            logger.info(f"{self.user_data_dir}学习进度详情：{response_json}")
-            self.send_check_result(str(round(int(response_json['result']['requiredPeriod']) / 3600, 1)),
-                                   str(round(int(response_json['result']['electivePeriod']) / 3600, 1)))
-            # 判断选修
-            if int(response_json['result']['electivePeriod']) < int(
-                    response_json['result']['classElectiveTimes']) * 60 * 60:
-                logger.info(f"{self.user_data_dir}准备选修")
-                self.is_must = False
-                return True
-            elif int(response_json['result']['requiredPeriod']) < int(response_json['result']['classTimes']) * 60 * 60:
-                logger.info(f"{self.user_data_dir}准备必修")
-                self.is_must = True
-                return True
-            # 判断必修
-            logger.info(f"{self.user_data_dir}选修和必修已全部学完，结束课程")
-            self.is_complete = True
-            self.is_running = False
-            return False
-        except Exception as e:
-            logger.error(f"{self.user_data_dir}获取学习时长失败: {str(e)}")
-            return True
-
-    def judge_is_next_page(self):
-
-        # 首次运行时记录主页面句柄
-        if not self.main_window_handle:
-            self.main_window_handle = self.driver.current_window_handle
-            logger.debug(f"已记录主页面句柄: {self.main_window_handle}")
-
-        try:
-            # 等待class为"list"的div元素加载完成
-            list_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "list"))
-            )
-
-            # 获取该div下的所有a标签
-            a_tags = list_div.find_elements(By.TAG_NAME, "a")
-            # logger.info(f"共找到{len(a_tags)}个a标签元素")
-
-            # 遍历每个a标签，检查是否包含class为"status success"的div
-            for index, a_tag in enumerate(a_tags, 1):
-                try:
-                    # 获取a标签的链接和文本
-                    a_href = a_tag.get_attribute("href")
-                    # 检查当前a标签内是否存在class为"status success"的div
-                    a_tag.find_element(By.XPATH, ".//div[@class='status success']")
-                    # logger.info(f"第{index}个a标签：视频播放完成")
-
-                except NoSuchElementException:
-                    logger.info(f"{self.user_data_dir}第{index}个a标签:视频未播放完成，在新的标签页开始播放视频")
-
-                    # 记录当前所有标签页句柄（点击前）
-                    handles_before_click = self.driver.window_handles
-
-                    # 点击a标签打开新页面
-                    a_tag.click()
-
-                    # 等待新标签页打开
-                    WebDriverWait(self.driver, 10).until(EC.number_of_windows_to_be(len(handles_before_click) + 1))
-
-                    # 获取所有标签页句柄（点击后）
-                    all_handles = self.driver.window_handles
-
-                    # 找到新打开的标签页句柄
-                    new_handle = [h for h in all_handles if h not in handles_before_click][0]
-
-                    # 关闭之前的标签页（除了新打开的页面）
-                    for handle in all_handles:
-                        if handle != new_handle:
-                            self.driver.switch_to.window(handle)
-                            self.driver.close()
-                            logger.debug(f"已关闭标签页: {handle}")
-
-                    # 切换到新打开的标签页
-                    self.driver.switch_to.window(new_handle)
-                    logger.debug(f"已切换到新标签页: {new_handle}")
-
-                    # 解析课程ID
-                    self.current_course_id = parse_courseid_by_regex(a_href)
-                    logger.info(f"{self.user_data_dir}当前课程ID: {self.current_course_id}")
-
-                    return False  # 找到未播放视频，返回False停止翻页
-
-                except Exception as e:
-                    logger.error(f"处理第{index}个a标签时出错: {str(e)}")
-
-            logger.info(f"{self.user_data_dir}未找到需要播放的视频，点击下一页")
-            return True  # 所有视频已完成，返回True继续翻页
-
-        except TimeoutException:
-            logger.warning("未找到class为'list'的div元素，可能已到最后一页")
-            return False
-        except Exception as e:
-            logger.error(f"判断下一页时发生错误: {str(e)}")
-            return False
 
     def check_course_success(self):
         sleep_time = 10
