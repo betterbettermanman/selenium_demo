@@ -406,6 +406,23 @@ class TeacherTrainingChecker:
                 break
         # 开始判断是否完成课程
         column_wrap = current_course.find_element(By.CLASS_NAME, "column-wrap")
+        course_title = current_course.find_element(By.CLASS_NAME, "course-title")
+        # 查找该元素下的 img 标签
+        try:
+            img_element = course_title.find_element(By.TAG_NAME, "img")
+            img_src = img_element.get_attribute("src")
+
+            # 判断 src 是否为某个值
+            target_src = "static/images/icon-label3.png"
+            if   target_src in img_src:
+                print("图片 src 匹配,课程已完成")
+                self.is_running = False
+                return "complete"
+            else:
+                print(f"图片 src 不匹配，实际值：{img_src}")
+        except:
+            print("未找到 img 标签")
+
         video_process = column_wrap.find_elements(By.CLASS_NAME, "el-progress__text")
         # 如果不为已学100%，找到去激活按钮，进行激活
         # 如果不是已学100%
@@ -440,7 +457,7 @@ class TeacherTrainingChecker:
             logger.info("打开考试")
             self.open_exam()
             return "exam"
-        logger.info("当前课程已完成")
+        logger.info("当前课程已完成,更新状态")
         return "complete"
 
     def open_course(self):
