@@ -16,7 +16,7 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1100 }"
+      :scroll="{ x: 1200 }"
       row-key="id"
       @change="handleTableChange"
     >
@@ -123,7 +123,8 @@ import {
 } from '../utils/jsonHelper'
 
 const columns = [
-  { title: '网站编码', dataIndex: 'website_code', key: 'website_code', width: 140, fixed: 'left' },
+  { title: '网站名称', dataIndex: 'website_name', key: 'website_name', width: 140, fixed: 'left' },
+  { title: '网站编码', dataIndex: 'website_code', key: 'website_code', width: 120 },
   { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
   { title: '课程名称', dataIndex: 'name', key: 'name' },
   { title: '课程ID', dataIndex: 'class_id', key: 'class_id' },

@@ -183,10 +183,10 @@ class ScgbTaskRunner(BaseTaskRunner):
             while not self.is_complete and monitor.is_alive():
                 time.sleep(1)
 
-            if self.is_complete:
+            if self.is_complete and not self._stopped:
                 update_task_fields(self.task, status='2')
                 logger.info('[SCGB] 任务完成 id=%s', self.task.id)
-            else:
+            elif not self._stopped:
                 update_task_fields(self.task, status='1')
                 logger.warning('[SCGB] 任务未完成 id=%s', self.task.id)
         except Exception:

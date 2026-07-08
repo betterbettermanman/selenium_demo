@@ -59,6 +59,21 @@
             >
               启动
             </a-button>
+            <a-popconfirm
+              title="确定关闭该任务吗？将关闭对应浏览器并停止执行。"
+              :disabled="!record.is_running"
+              @confirm="handleStop(record.id)"
+            >
+              <a-button
+                type="link"
+                size="small"
+                danger
+                :loading="stoppingTaskId === record.id"
+                :disabled="!record.is_running"
+              >
+                关闭
+              </a-button>
+            </a-popconfirm>
             <a-button type="link" size="small" @click="openModal(record)">编辑</a-button>
             <a-popconfirm title="确定删除该任务吗？" @confirm="handleDelete(record.id)">
               <a-button type="link" danger size="small">删除</a-button>
@@ -178,7 +193,7 @@ const columns = [
   { title: '状态', key: 'status', width: 90 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
-  { title: '操作', key: 'action', width: 200, fixed: 'right' },
+  { title: '操作', key: 'action', width: 260, fixed: 'right' },
 ]
 
 const loading = ref(false)
@@ -192,6 +207,7 @@ const editingId = ref(null)
 const websiteOptions = ref([])
 const courseOptions = ref([])
 const startingTaskId = ref(null)
+const stoppingTaskId = ref(null)
 const smsModalVisible = ref(false)
 const smsSubmitting = ref(false)
 const smsResending = ref(false)
@@ -336,6 +352,22 @@ const handleSubmit = async () => {
     fetchList()
   } finally {
     submitting.value = false
+  }
+}
+
+const handleStop = async (id) => {
+  stoppingTaskId.value = id
+  try {
+    const res = await taskApi.stop(id)
+    message.success(res.message || '任务已关闭')
+    if (smsTaskId.value === id) {
+      smsModalVisible.value = false
+      smsCode.value = ''
+      smsTaskId.value = null
+    }
+    fetchList()
+  } finally {
+    stoppingTaskId.value = null
   }
 }
 

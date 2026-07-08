@@ -8,6 +8,13 @@ from utils.json_validate import validate_json_object_or_array
 course_bp = Blueprint('course', __name__, url_prefix='/api/courses')
 
 
+def _enrich_course_dict(course_dict):
+    website = Website.query.filter_by(code=course_dict.get('website_code')).first()
+    course_dict['website_name'] = website.name if website else ''
+    course_dict['website_id'] = website.id if website else None
+    return course_dict
+
+
 def _validate_course_payload(data):
     err = validate_json_object_or_array(data.get('courses'), '特定课表')
     if err:
@@ -51,7 +58,7 @@ def list_courses():
     return {
         'code': 200,
         'data': {
-            'list': [item.to_dict() for item in pagination.items],
+            'list': [_enrich_course_dict(item.to_dict()) for item in pagination.items],
             'total': pagination.total,
             'page': page,
             'page_size': page_size,
@@ -65,7 +72,7 @@ def get_course(item_id):
     item = Course.query.get(item_id)
     if not item:
         return {'code': 404, 'message': '课程不存在'}, 404
-    return {'code': 200, 'data': item.to_dict(), 'message': 'success'}
+    return {'code': 200, 'data': _enrich_course_dict(item.to_dict()), 'message': 'success'}
 
 
 @course_bp.route('', methods=['POST'])
@@ -83,7 +90,7 @@ def create_course():
     )
     db.session.add(item)
     db.session.commit()
-    return {'code': 200, 'data': item.to_dict(), 'message': '创建成功'}
+    return {'code': 200, 'data': _enrich_course_dict(item.to_dict()), 'message': '创建成功'}
 
 
 @course_bp.route('/<int:item_id>', methods=['PUT'])
@@ -109,7 +116,7 @@ def update_course(item_id):
         item.remark = data['remark']
 
     db.session.commit()
-    return {'code': 200, 'data': item.to_dict(), 'message': '更新成功'}
+    return {'code': 200, 'data': _enrich_course_dict(item.to_dict()), 'message': '更新成功'}
 
 
 @course_bp.route('/<int:item_id>', methods=['DELETE'])

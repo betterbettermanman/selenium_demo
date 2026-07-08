@@ -4,7 +4,14 @@ from models import db
 from models.course import Course
 from models.task import Task
 from models.website import Website
-from services.task_runner import get_runner, is_task_running, resend_sms_code, start_task, submit_sms_code
+from services.task_runner import (
+    get_runner,
+    is_task_running,
+    resend_sms_code,
+    start_task,
+    stop_task,
+    submit_sms_code,
+)
 from services.task_runner import RunnerPhase
 
 task_bp = Blueprint('task', __name__, url_prefix='/api/tasks')
@@ -212,6 +219,24 @@ def submit_sms_code_api(item_id):
 
     app = current_app._get_current_object()
     ok, msg = submit_sms_code(item_id, code, app)
+    if not ok:
+        return {'code': 400, 'message': msg}, 400
+
+    return {
+        'code': 200,
+        'data': _enrich_task_dict(item.to_dict()),
+        'message': msg,
+    }
+
+
+@task_bp.route('/<int:item_id>/stop', methods=['POST'])
+def stop_task_api(item_id):
+    item = Task.query.get(item_id)
+    if not item:
+        return {'code': 404, 'message': '任务不存在'}, 404
+
+    app = current_app._get_current_object()
+    ok, msg = stop_task(item_id, app)
     if not ok:
         return {'code': 400, 'message': msg}, 400
 

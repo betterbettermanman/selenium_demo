@@ -49,6 +49,7 @@ class BaseTaskRunner(ABC):
         self.phase = RunnerPhase.IDLE
         self.driver = None
         self._app = None
+        self._stopped = False
 
     def bind_app(self, app):
         self._app = app
@@ -83,6 +84,24 @@ class BaseTaskRunner(ABC):
 
     def _set_phase(self, phase: RunnerPhase):
         self.phase = phase
+
+    def request_stop(self):
+        """用户手动停止：终止循环并关闭浏览器。"""
+        self._stopped = True
+        self._set_phase(RunnerPhase.DONE)
+        if hasattr(self, 'is_running'):
+            self.is_running = False
+        self._cleanup()
+
+    def _cleanup(self):
+        if self.driver:
+            try:
+                self.driver.quit()
+                logger.info('任务 %s 浏览器已关闭', getattr(self.task, 'id', '?'))
+            except Exception:
+                logger.exception('任务 %s 关闭浏览器失败', getattr(self.task, 'id', '?'))
+            finally:
+                self.driver = None
 
 
 @register_runner('__default__')
@@ -143,10 +162,11 @@ def _start_main_thread(task_id, runner, app):
                 logger.exception('任务 %s 执行失败', task_id)
             finally:
                 _remove_runner(task_id)
-                try:
-                    runner._cleanup()
-                except Exception:
-                    logger.exception('任务 %s 清理失败', task_id)
+                if not runner._stopped:
+                    try:
+                        runner._cleanup()
+                    except Exception:
+                        logger.exception('任务 %s 清理失败', task_id)
 
     thread = threading.Thread(target=_target, daemon=True, name=f'task-{task_id}')
     with _lock:
@@ -236,6 +256,27 @@ def submit_sms_code(task_id, code, app):
 
     _start_main_thread(task_id, runner, app)
     return True, msg or '验证成功，任务继续执行'
+
+
+def stop_task(task_id, app):
+    with _lock:
+        runner = _running_runners.get(task_id)
+
+    if not runner or not is_task_running(task_id):
+        return False, '任务未在运行'
+
+    logger.info('用户手动停止任务 %s', task_id)
+    try:
+        runner.request_stop()
+    except Exception:
+        logger.exception('停止任务 %s 时关闭浏览器失败', task_id)
+
+    _remove_runner(task_id)
+
+    with app.app_context():
+        update_task_fields(runner.task, status='1')
+
+    return True, '任务已关闭'
 
 
 def resend_sms_code(task_id, app):

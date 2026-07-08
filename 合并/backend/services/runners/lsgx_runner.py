@@ -45,7 +45,8 @@ class LsgxTaskRunner(BaseTaskRunner):
             self._init_browser()
             self._login()
             self._play_courses()
-            update_task_fields(self.task, status='2')
+            if not self._stopped:
+                update_task_fields(self.task, status='2')
             logger.info('[LSGX] 任务 id=%s 执行完成', self.task.id)
         except Exception as exc:
             logger.exception('[LSGX] 任务 id=%s 执行失败: %s', self.task.id, exc)
@@ -245,7 +246,7 @@ class LsgxTaskRunner(BaseTaskRunner):
     def _mark_course_complete(self):
         """课程全部学完：设置完成标志并同步更新数据库。"""
         self.is_complete = True
-        if update_task_fields(self.task, status='2'):
+        if not self._stopped and update_task_fields(self.task, status='2'):
             logger.info('[LSGX] 任务 id=%s 课程已全部学完，状态已更新为完成', self.task.id)
         else:
             logger.error('[LSGX] 任务 id=%s 课程已学完，但状态更新失败', self.task.id)
