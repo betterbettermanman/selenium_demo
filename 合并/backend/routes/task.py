@@ -4,7 +4,8 @@ from models import db
 from models.course import Course
 from models.task import Task
 from models.website import Website
-from services.task_runner import is_task_running, start_task
+from services.task_runner import get_runner, is_task_running, resend_sms_code, start_task, submit_sms_code
+from services.task_runner import RunnerPhase
 
 task_bp = Blueprint('task', __name__, url_prefix='/api/tasks')
 
@@ -22,6 +23,11 @@ def _enrich_task_dict(task_dict):
     task_dict['course_id'] = course.id if course else None
     task_dict['course_name'] = course.name if course else ''
     task_dict['is_running'] = is_task_running(task_dict.get('id'))
+    runner = get_runner(task_dict.get('id'))
+    task_dict['waiting_sms'] = (
+        runner is not None and runner.phase == RunnerPhase.WAITING_SMS
+    )
+    task_dict['enable_sms_code'] = website.enable_sms_code if website else '0'
     return task_dict
 
 
@@ -179,7 +185,33 @@ def start_task_api(item_id):
         return {'code': 404, 'message': '任务不存在'}, 404
 
     app = current_app._get_current_object()
-    ok, msg = start_task(item_id, app)
+    ok, result = start_task(item_id, app)
+    if not ok:
+        return {'code': 400, 'message': result.get('message', '启动失败')}, 400
+
+    return {
+        'code': 200,
+        'data': {
+            **_enrich_task_dict(item.to_dict()),
+            'need_sms': result.get('need_sms', False),
+        },
+        'message': result.get('message', '任务已启动'),
+    }
+
+
+@task_bp.route('/<int:item_id>/sms-code', methods=['POST'])
+def submit_sms_code_api(item_id):
+    item = Task.query.get(item_id)
+    if not item:
+        return {'code': 404, 'message': '任务不存在'}, 404
+
+    data = request.get_json() or {}
+    code = (data.get('code') or '').strip()
+    if not code:
+        return {'code': 400, 'message': '请输入手机验证码'}, 400
+
+    app = current_app._get_current_object()
+    ok, msg = submit_sms_code(item_id, code, app)
     if not ok:
         return {'code': 400, 'message': msg}, 400
 
@@ -188,6 +220,20 @@ def start_task_api(item_id):
         'data': _enrich_task_dict(item.to_dict()),
         'message': msg,
     }
+
+
+@task_bp.route('/<int:item_id>/resend-sms', methods=['POST'])
+def resend_sms_code_api(item_id):
+    item = Task.query.get(item_id)
+    if not item:
+        return {'code': 404, 'message': '任务不存在'}, 404
+
+    app = current_app._get_current_object()
+    ok, msg = resend_sms_code(item_id, app)
+    if not ok:
+        return {'code': 400, 'message': msg}, 400
+
+    return {'code': 200, 'message': msg}
 
 
 @task_bp.route('/<int:item_id>', methods=['DELETE'])

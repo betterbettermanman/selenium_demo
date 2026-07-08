@@ -38,7 +38,8 @@
             <a-tag :color="record.status === '2' ? 'green' : 'orange'">
               {{ record.status === '2' ? '完成' : '未完成' }}
             </a-tag>
-            <a-tag v-if="record.is_running" color="processing">执行中</a-tag>
+            <a-tag v-if="record.waiting_sms" color="warning">待验证码</a-tag>
+            <a-tag v-else-if="record.is_running" color="processing">执行中</a-tag>
           </a-space>
         </template>
         <template v-if="column.key === 'is_head'">
@@ -53,7 +54,7 @@
               type="link"
               size="small"
               :loading="startingTaskId === record.id"
-              :disabled="record.is_running"
+              :disabled="record.is_running && !record.waiting_sms"
               @click="handleStart(record)"
             >
               启动
@@ -129,6 +130,36 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="smsModalVisible"
+      title="提交手机验证码"
+      :confirm-loading="smsSubmitting"
+      ok-text="确认"
+      cancel-text="取消"
+      @ok="handleSubmitSms"
+      @cancel="smsCode = ''"
+    >
+      <a-alert
+        message="登录已发起，请输入手机短信验证码后继续执行任务"
+        type="info"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="手机验证码" required>
+          <a-input
+            v-model:value="smsCode"
+            placeholder="请输入手机验证码"
+            maxlength="8"
+            @press-enter="handleSubmitSms"
+          />
+        </a-form-item>
+        <a-button type="link" :loading="smsResending" @click="handleResendSms">
+          重发验证码
+        </a-button>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -161,6 +192,11 @@ const editingId = ref(null)
 const websiteOptions = ref([])
 const courseOptions = ref([])
 const startingTaskId = ref(null)
+const smsModalVisible = ref(false)
+const smsSubmitting = ref(false)
+const smsResending = ref(false)
+const smsCode = ref('')
+const smsTaskId = ref(null)
 
 const form = reactive({
   website_id: undefined,
@@ -310,17 +346,74 @@ const handleDelete = async (id) => {
 }
 
 const handleStart = async (record) => {
+  if (record.waiting_sms) {
+    smsTaskId.value = record.id
+    smsCode.value = ''
+    smsModalVisible.value = true
+    return
+  }
   if (record.is_running) {
     message.warning('任务正在执行中')
     return
   }
   startingTaskId.value = record.id
+  const hideLoading = message.loading('正在启动浏览器并登录，请稍候...', 0)
   try {
     const res = await taskApi.start(record.id)
-    message.success(res.message || '任务已启动')
+    if (res.data?.need_sms) {
+      smsTaskId.value = record.id
+      smsCode.value = ''
+      smsModalVisible.value = true
+      message.info(res.message || '请输入手机验证码')
+    } else {
+      message.success(res.message || '任务已启动')
+    }
     fetchList()
+  } catch (error) {
+    await fetchList()
+    const latest = dataList.value.find((item) => item.id === record.id)
+    if (latest?.waiting_sms) {
+      smsTaskId.value = record.id
+      smsCode.value = ''
+      smsModalVisible.value = true
+      message.info('登录已完成，请输入手机验证码')
+    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      message.warning('启动耗时较长，请稍后刷新列表或再次点击启动')
+    } else {
+      message.error(error.response?.data?.message || error.message || '启动失败')
+    }
   } finally {
+    hideLoading()
     startingTaskId.value = null
+  }
+}
+
+const handleSubmitSms = async () => {
+  if (!smsCode.value.trim()) {
+    message.warning('请输入手机验证码')
+    return Promise.reject()
+  }
+  smsSubmitting.value = true
+  try {
+    const res = await taskApi.submitSmsCode(smsTaskId.value, smsCode.value.trim())
+    message.success(res.message || '验证成功，任务继续执行')
+    smsCode.value = ''
+    fetchList()
+  } catch (e) {
+    return Promise.reject(e)
+  } finally {
+    smsSubmitting.value = false
+  }
+}
+
+const handleResendSms = async () => {
+  if (!smsTaskId.value) return
+  smsResending.value = true
+  try {
+    const res = await taskApi.resendSmsCode(smsTaskId.value)
+    message.success(res.message || '验证码已重发')
+  } finally {
+    smsResending.value = false
   }
 }
 

@@ -11,7 +11,6 @@ import time
 from typing import Any
 
 from models import db
-from selenium.common import TimeoutException, ElementNotInteractableException
 from services.task_runner import BaseTaskRunner, register_runner, update_task_fields
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ class LsgxTaskRunner(BaseTaskRunner):
         self.current_course_url = LSGX_DEFAULT_COURSE_URL
         self._monitor_thread = None
 
-    def run(self):
+    def run_main(self):
         logger.info(
             '[LSGX] 开始任务 id=%s user=%s class_id=%s enable_sms=%s headless=%s',
             self.task.id,
@@ -128,6 +127,7 @@ class LsgxTaskRunner(BaseTaskRunner):
         logger.info('[LSGX] 浏览器已启动 headless=%s', self.task.is_head == '1')
 
     def _login(self):
+        from selenium.common import ElementNotInteractableException, TimeoutException
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait

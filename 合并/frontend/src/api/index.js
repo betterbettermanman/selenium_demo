@@ -16,7 +16,14 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
-    message.error(error.message || '网络错误')
+    if (error.config?.skipGlobalError) {
+      return Promise.reject(error)
+    }
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      message.error('请求超时，请稍后刷新列表查看任务状态')
+    } else {
+      message.error(error.response?.data?.message || error.message || '网络错误')
+    }
     return Promise.reject(error)
   }
 )
@@ -40,7 +47,10 @@ export const taskApi = {
   create: (data) => request.post('/tasks', data),
   update: (id, data) => request.put(`/tasks/${id}`, data),
   delete: (id) => request.delete(`/tasks/${id}`),
-  start: (id) => request.post(`/tasks/${id}/start`),
+  // 启动含浏览器登录，耗时较长
+  start: (id) => request.post(`/tasks/${id}/start`, null, { timeout: 120000, skipGlobalError: true }),
+  submitSmsCode: (id, code) => request.post(`/tasks/${id}/sms-code`, { code }, { timeout: 60000 }),
+  resendSmsCode: (id) => request.post(`/tasks/${id}/resend-sms`, null, { timeout: 30000 }),
 }
 
 export default request
