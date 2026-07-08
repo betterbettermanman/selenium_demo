@@ -4,7 +4,7 @@
       <a-space>
         <a-input-search
           v-model:value="keyword"
-          placeholder="搜索账号/网站/课程/备注"
+          placeholder="搜索姓名/单位/账号/网站/课程/备注"
           style="width: 280px"
           allow-clear
           @search="handleSearch"
@@ -28,25 +28,37 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1200 }"
+      :scroll="{ x: 1380 }"
       row-key="id"
       @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'website_course'">
+          <div class="stacked-cell">
+            <div class="stacked-cell__primary">{{ record.website_name || '-' }}</div>
+            <div class="stacked-cell__secondary">{{ record.course_name || '-' }}</div>
+          </div>
+        </template>
+        <template v-if="column.key === 'user_info'">
+          <div class="stacked-cell">
+            <div class="stacked-cell__primary">{{ record.nick_name || '-' }}</div>
+            <div class="stacked-cell__secondary">{{ record.organ_name || '-' }}</div>
+          </div>
+        </template>
         <template v-if="column.key === 'status'">
           <a-space>
             <a-tag :color="record.status === '2' ? 'green' : 'orange'">
               {{ record.status === '2' ? '完成' : '未完成' }}
             </a-tag>
             <a-tag v-if="record.waiting_sms" color="warning">待验证码</a-tag>
-            <a-tag v-else-if="record.is_running" color="processing">执行中</a-tag>
+            <span v-else-if="record.is_running" class="running-status">
+              <LoadingOutlined spin class="running-status__icon" />
+              执行中
+            </span>
           </a-space>
         </template>
         <template v-if="column.key === 'is_head'">
           {{ record.is_head === '1' ? '无头' : '有头' }}
-        </template>
-        <template v-if="column.key === 'password'">
-          ******
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
@@ -128,6 +140,9 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="姓名">
+          <a-input v-model:value="form.nick_name" placeholder="请输入姓名（可选）" />
+        </a-form-item>
         <a-form-item label="账号" required>
           <a-input v-model:value="form.username" placeholder="请输入账号" />
         </a-form-item>
@@ -180,17 +195,18 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import { LoadingOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { courseApi, taskApi, websiteApi } from '../api'
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70, fixed: 'left' },
-  { title: '网站名称', dataIndex: 'website_name', key: 'website_name', width: 140 },
-  { title: '课程名称', dataIndex: 'course_name', key: 'course_name', width: 140 },
+  { title: '网站/课程', key: 'website_course', width: 200, ellipsis: true },
+  { title: '姓名/单位', key: 'user_info', width: 180, ellipsis: true },
   { title: '账号', dataIndex: 'username', key: 'username', width: 120 },
-  { title: '密码', key: 'password', width: 80 },
+  { title: '密码', dataIndex: 'password', key: 'password', width: 120, ellipsis: true },
   { title: '无头模式', key: 'is_head', width: 90 },
-  { title: '状态', key: 'status', width: 90 },
+  { title: '状态', key: 'status', width: 170 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
   { title: '操作', key: 'action', width: 260, fixed: 'right' },
@@ -217,6 +233,7 @@ const smsTaskId = ref(null)
 const form = reactive({
   website_id: undefined,
   course_id: undefined,
+  nick_name: '',
   username: '',
   password: '',
   is_head: '1',
@@ -290,6 +307,7 @@ const handleTableChange = (pag) => {
 const resetForm = () => {
   form.website_id = undefined
   form.course_id = undefined
+  form.nick_name = ''
   form.username = ''
   form.password = ''
   form.is_head = '1'
@@ -302,6 +320,7 @@ const openModal = async (record = null) => {
   resetForm()
   if (record) {
     form.website_id = record.website_id || undefined
+    form.nick_name = record.nick_name || ''
     form.username = record.username || ''
     form.password = record.password || ''
     form.is_head = record.is_head || '1'
@@ -336,6 +355,7 @@ const handleSubmit = async () => {
     const payload = {
       website_id: form.website_id,
       course_id: form.course_id,
+      nick_name: form.nick_name.trim(),
       username: form.username,
       password: form.password,
       is_head: form.is_head,
@@ -460,5 +480,36 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.stacked-cell__primary {
+  line-height: 1.4;
+}
+
+.stacked-cell__secondary {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.running-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #1677ff;
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+  border-radius: 4px;
+}
+
+.running-status__icon {
+  font-size: 12px;
 }
 </style>

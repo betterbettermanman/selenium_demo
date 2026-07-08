@@ -109,6 +109,7 @@ def create_task():
     username = (data.get('username') or '').strip()
     password = (data.get('password') or '').strip()
     remark = data.get('remark')
+    nick_name = (data.get('nick_name') or '').strip()
 
     if not username:
         return {'code': 400, 'message': '请输入账号'}, 400
@@ -121,6 +122,7 @@ def create_task():
     website, course = result
 
     item = Task(
+        nick_name=nick_name,
         username=username,
         password=password,
         remark=remark,
