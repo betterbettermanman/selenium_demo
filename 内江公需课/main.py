@@ -1,6 +1,5 @@
 import json
 import os
-import random
 import re
 import sys
 import threading
@@ -145,7 +144,7 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
 task_contain = []
 max_task_num = 5
 # todo 需要动态修改的
-target_num = 10
+target_num = 9
 
 
 def continue_task():
@@ -274,7 +273,7 @@ def extract_value_from_url(url, key):
         return None  # 没有查询参数
 
     query_string = hash_part[
-                   query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
+        query_start + 1:]  # 结果为：id=018a4061-a884-7856-81a5-77be717dede0&className=&classId=019815fe-ec44-753d-9b1d-554f017df106
 
     # 解析查询参数为字典
     query_params = parse_qs(query_string)
@@ -429,49 +428,198 @@ class TeacherTrainingChecker:
                 return True
         return False
 
+    def get_course_list(self):
+        # 2. 在第三个div中查找包含课程列表的滚动div
+        # 根据HTML结构，课程在 style="overflow: scroll; overflow-x: hidden; height: 200;" 的div中
+        scroll_div = third_div.find_element(By.XPATH,
+                                            ".//div[@style='overflow: scroll; overflow-x: hidden; height: 200;']"
+                                            )
+        print("✓ 找到课程列表容器")
+
+        # 3. 获取所有课程链接（a标签）
+        links = scroll_div.find_elements(By.TAG_NAME, "a")
+
+        if not links:
+            print("未找到任何课程链接")
+            return []
+
+        # 4. 提取每个课程的信息
+        courses = []
+
+        for link in links:
+            try:
+                # 获取课程名称（a标签前面的文本节点）
+                course_name = driver.execute_script(
+                    "return arguments[0].previousSibling.textContent.trim();",
+                    link
+                )
+                course_name = course_name.replace('&lt;', '').strip()
+
+                # 获取状态（a标签的文本）
+                status = link.text.strip()
+
+                # 获取链接地址
+                href = link.get_attribute('href')
+
+                # 获取课程ID（从id属性中提取）
+                link_id = link.get_attribute('id')
+
+                courses.append({
+                    'name': course_name,
+                    'status': status,
+                    'href': href,
+                    'id': link_id,
+                    'element': link
+                })
+
+            except Exception as e:
+                print(f"解析课程信息失败: {e}")
+                continue
+
+        return courses
+
+    def get_third_div_by_steps(self):
+        """
+        分步获取：先获取form1，再获取其直接子div中的第三个
+        """
+        try:
+            # 1. 获取form1元素
+            form1 = self.driver.find_element(By.ID, "form1")
+
+            # 2. 获取所有直接子元素中的div
+            divs = form1.find_elements(By.XPATH, "./div")
+
+            # 3. 检查是否有至少3个div
+            if len(divs) >= 3:
+                third_div = divs[2]  # 索引从0开始，所以第3个是索引2
+
+                # 2. 在第三个div中查找包含课程列表的滚动div
+                # 根据HTML结构，课程在 style="overflow: scroll; overflow-x: hidden; height: 200;" 的div中
+                scroll_div = third_div.find_element(By.XPATH,
+                                                    ".//div[@style='overflow: scroll; overflow-x: hidden; height: 200;']"
+                                                    )
+                print("✓ 找到课程列表容器")
+
+                # 3. 获取所有课程链接（a标签）
+                links = scroll_div.find_elements(By.TAG_NAME, "a")
+
+                if not links:
+                    print("未找到任何课程链接")
+                    return []
+
+                # 4. 提取每个课程的信息
+                courses = []
+
+                for link in links:
+                    try:
+                        # 获取课程名称（a标签前面的文本节点）
+                        course_name = self.driver.execute_script(
+                            "return arguments[0].previousSibling.textContent.trim();",
+                            link
+                        )
+                        course_name = course_name.replace('&lt;', '').strip()
+
+                        # 获取状态（a标签的文本）
+                        status = link.text.strip()
+                        print("status: " + status)
+                        # 【核心功能】判断状态是否为"已完成"
+                        if status != '已完成':
+                            print(f"\n{len(links)}] 未完成课程: {course_name}")
+                            print(f"  状态: {status}")
+
+                            # 点击播放
+                            print("  正在点击播放...")
+                            link.click()
+                            time.sleep(2)  # 等待页面响应
+                            return
+
+                        # 获取链接地址
+                        href = link.get_attribute('href')
+
+                        # 获取课程ID（从id属性中提取）
+                        link_id = link.get_attribute('id')
+
+                        courses.append({
+                            'name': course_name,
+                            'status': status,
+                            'href': href,
+                            'id': link_id,
+                            'element': link
+                        })
+
+                    except Exception as e:
+                        print(f"解析课程信息失败: {e}")
+                        continue
+
+                # return courses
+
+
+            else:
+                print(f"form1下只有 {len(divs)} 个div，不足3个")
+                return None
+        except Exception as e:
+            print(f"获取第三个div失败: {e}")
+            return None
+
+    def find_and_play_first_unfinished(self):
+        """
+        找到第一个未完成的课程并点击播放，然后退出
+        返回: True表示找到并播放了，False表示没有未完成的课程
+        """
+        try:
+
+            # 1. 先切换到iframe
+            if not self.switch_to_playframe():
+                print("无法切换到iframe，程序退出")
+                return False
+            self.get_third_div_by_steps()
+
+            # print(f"✓ 已开始播放: {first_unfinished['name']}")
+            return True
+
+        except Exception as e:
+            print(f"播放失败: {e}")
+            return False
+
+    def switch_to_playframe(self):
+        """
+        切换到id为playframeNew的iframe
+        """
+        try:
+            # 等待iframe加载
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.ID, "playframeNew"))
+            )
+
+            # 切换到iframe
+            self.driver.switch_to.frame("playframeNew")
+            print("✓ 已切换到 playframeNew iframe")
+            return True
+
+        except Exception as e:
+            print(f"切换iframe失败: {e}")
+            return False
+
     def open_home(self):
         if self.is_complete:
             return
         logger.info(f"{self.user_data_dir}进行学习")
         logger.info(
             f"{self.user_data_dir}打开首页，检测视频学习情况")
-        url = "https://basic.sc.smartedu.cn/hd/teacherTraining/coursedatail?courseId=1983474287572594688"
+        url = "https://www.njsjxjy.cn/play/play.aspx?course_id=1166058&try="
         self.driver.get(url)
         time.sleep(5)
-        divs = self.driver.find_elements(By.CLASS_NAME, "course-list-cell")
-        required_period = 0
-        for div in divs:
-            required_period = required_period + 1
-            try:
-                status = div.find_element(By.XPATH, ".//div[@class='status']")
-                if status.text != "已学习":
-                    div.click()
-                    logger.info(f"{self.user_data_dir}点击未播放视频")
-                    time.sleep(5)
-                    # 点击播放按钮
-                    video = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.ID, 'video'))
-                    )
-                    self.driver.execute_script("arguments[0].play();", video)
-                    logger.info(f"{self.user_data_dir}开始播放")
-                    # 从url中提取course_id
-                    self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
-                    return
-            except Exception as e:
-                div.click()
-                logger.info("点击未播放视频")
-                time.sleep(5)
-                # 点击播放按钮
-                video = WebDriverWait(self.driver, 10).until(
-                    EC.element_to_be_clickable((By.ID, 'video'))
-                )
-                self.driver.execute_script("arguments[0].play();", video)
-                logger.info("开始播放")
-                # 从url中提取course_id
-                self.current_course_id = self.extract_param_from_hash_url(self.driver.current_url, "subsectionId")
-                return
+        # 找到第一个未完成的课程并播放
+        # 切换一个iframe
+        success = self.find_and_play_first_unfinished()
 
-        update_data(self.username, requiredPeriod=required_period)
+        if success:
+            print("\n成功找到并播放第一个未完成课程，程序退出。")
+            return
+        else:
+            print("\n没有找到未完成的课程或播放失败。")
+
+        update_data(self.username, requiredPeriod=10)
         self.is_complete = True
 
     def open_course(self):
@@ -849,50 +997,25 @@ class TeacherTrainingChecker:
     def check_course_success(self):
         sleep_time = 10
         while not self.is_complete:
-            if self.sleep_time_num == 100:
-                logger.info(f"{self.user_data_dir}睡眠重复次数超过3次，重新打开页面")
-                self.is_login()
-                threading.Thread(target=self.open_home, daemon=True).start()
-                self.current_course_id = ""
-                self.sleep_time_num = 0
-                time.sleep(10)
-                continue
-            check_play_success_url = "https://basic.sc.smartedu.cn/hd/teacherTraining/api/studyCourseUser/chapterProcess?chapterId=1983474473980047360"
-            logger.info(f"{self.user_data_dir}检测课程id: {self.current_course_id}")
-            if self.current_course_id != "":
-                try:
-                    course_detail = requests.get(check_play_success_url, headers=self.headers)
-                    # 可以打印完整的URL来验证
-                    logger.info(f"{self.user_data_dir}完整请求URL: {course_detail.url}")
-                    detail_json = course_detail.json()["returnData"]["studySubsectionUsers"]
-                    # logger.info(f"{self.user_data_dir}的【{self.current_course_id}】课程详情: {detail_json}")
-                    for detail in detail_json:
-                        if self.current_course_id == detail["subsectionId"]:
-                            if int(detail["schedule"]) >= 100:
-                                logger.info(
-                                    f"{self.user_data_dir}的【{self.current_course_id}】已观看完成，但未完成学时，继续播放下一个视频")
-                                threading.Thread(target=self.open_home, daemon=True).start()
-                            else:
-                                # 当前视频未播放完成，间隔5-10分钟继续检测
-                                logger.info(
-                                    f"{self.user_data_dir}的【{self.current_course_id}】未观看完成，进度：{detail['schedule']}")
-                                sleep_time = random.randint(150, 300)
+            """
+               通过ID获取进度值
+               """
+            try:
+                # 通过ID定位span元素
+                span_element = self.driver.find_element(By.ID, "spanThisProgress")
+                # 获取文本内容
+                progress_value = span_element.text
+                print(f"进度值: {progress_value}")
 
-                except TimeoutException:
-                    logger.error("链接超时")
+                # 转换为浮点数（如果需要）
+                progress_float = float(progress_value)
+                print(f"进度值(浮点): {progress_float}")
+                if progress_float == 100:
+                    self.open_home()
+                    time.sleep(30)
                     continue
-                except Exception as e:
-                    logger.error(f"{self.user_data_dir}检测课程状态失败: {str(e)}，可能登陆失效，进行登录检测")
-                    self.is_login()
-                    sleep_time = 20
-            else:
-                sleep_time = 10
-            logger.debug("记录睡眠值，以及重复次数")
-            if self.sleep_time == sleep_time:
-                self.sleep_time_num = self.sleep_time_num + 1
-            else:
-                self.sleep_time = sleep_time
-                self.sleep_time_num = 0
+            except Exception as e:
+                print(f"获取进度值失败: {e}")
 
             logger.info(f"{self.user_data_dir}间隔{sleep_time}秒，继续检测")
             time.sleep(sleep_time)
@@ -982,7 +1105,7 @@ class TeacherTrainingChecker:
             time.sleep(10)
             # time.sleep(3)
             # 检查登录状态
-            jwtToken = self.get_cookies_values("Teaching_Autonomic_Learning_Token")
+            jwtToken = self.get_cookies_values("ASP.NET_SessionId")
 
             if jwtToken:
                 # realName = self.get_session_storage_value("realName")
@@ -1067,32 +1190,47 @@ class TeacherTrainingChecker:
         try:
             logger.info(f"{self.user_data_dir}开始自动登录")
             self.driver.get(
-                "https://basic.sc.smartedu.cn/ThirdPortalService/user/otherlogin!login.ac?appkey=C56DA16ECBC56FBEEC908DA09E45C72C917A80118F057FA1F0B5BAE41CC9CC9DECD5BDB7133FE17C328C5D37B37CA8E7&pkey=5D79CA42E45C5273DF8532D09E1F158B15E25919CDB958940F84D5E63F5F53A1ECD5BDB7133FE17C328C5D37B37CA8E7&params=718F83A5347CBFDB7D1A9065FA090FE949D92330BB9A3351FE0715C5B8A3E86F37916C1004E835C7C7F964E3F301477F7D37F04485FA8707845DAAA23356236ED1D326CF5A5E3C263470516EE9B4A2ED")
+                "https://www.njsjxjy.cn/login.aspx?ReturnUrl=/play/play.aspx?course_id=1166058&try=")
             time.sleep(2)
 
             username_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.ID, 'loginName'))
+                EC.element_to_be_clickable((By.ID, 'ctl10_UserName'))
             )
             username_input.clear()
             username_input.send_keys(self.username)
 
             password_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.ID, 'password'))
+                EC.element_to_be_clickable((By.ID, 'ctl10_Password'))
             )
             password_input.send_keys(self.password)
 
+            # # 处理验证码
+            capture_input = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.ID, 'ctl10_code_op'))
+            )
+            capture_input.clear()
+            captcha = self.get_formdata_img_src()
+            capture_input.send_keys(captcha)
+
             login_button = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.CLASS_NAME, 'submit-btn'))
+                EC.element_to_be_clickable((By.ID, 'ctl10_ImageButton1'))
             )
             login_button.click()
-
+            time.sleep(5)
             try:
-                # 查找包含"取消"文本的a标签
-                cancel_button = WebDriverWait(self.driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), '取消')]"))
-                )
-                cancel_button.click()
-                logger.info(f"{self.user_data_dir}成功点击取消按钮")
+                # 使用示例
+                if self.is_alert_present():
+                    print("有弹窗，点确认")
+                    self.driver.switch_to.alert.accept()
+                else:
+                    print("没有弹窗")
+                #
+                # # 查找包含"取消"文本的a标签
+                # cancel_button = WebDriverWait(self.driver, 5).until(
+                #     EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), '取消')]"))
+                # )
+                # cancel_button.click()
+                # logger.info(f"{self.user_data_dir}成功点击取消按钮")
             except TimeoutException:
                 logger.info(f"{self.user_data_dir}5秒内未找到取消按钮，跳过")
 
@@ -1103,12 +1241,21 @@ class TeacherTrainingChecker:
         except Exception as e:
             logger.error(f"自动登录失败: {str(e)}")
 
+    def is_alert_present(self, timeout=3):
+        try:
+            confirm = self.driver.find_element(By.XPATH, "//button[contains(text(), '确定')]")
+            confirm.click()
+            # WebDriverWait(self.driver, timeout).until(EC.alert_is_present())
+            return True
+        except:
+            return False
+
     def get_formdata_img_src(self, wait_time=10):
         """获取验证码图片并识别"""
         try:
             # 等待验证码图片容器加载
             formdata_div = WebDriverWait(self.driver, wait_time).until(
-                EC.presence_of_element_located((By.XPATH, '//img[@alt="验证码"]'))
+                EC.presence_of_element_located((By.ID, 'UserImageCheck'))
             )
             logger.info("找到验证码图片容器")
             save_path = "png/" + self.username + ".png"  # 保存路径可自定义

@@ -1,8 +1,22 @@
 [
   {
-    "name": "510182198501014627",
-    "username": "510182198501014627",
-    "password": "Aa@13378354796",
+    "name": "胡15378348663",
+    "username": "胡15378348663",
+    "password": "hc15378348663",
+    "video_name": "眉山市2026年度专业技术人员继续教育公需科目",
+    "is_head": 0,
+    "start_index": 2,
+    "no_play_videos": [],
+    "status": "2",
+    "requiredPeriod": "19.0",
+    "electivePeriod": "30.1",
+    "created_at": "",
+    "updated_at": "2026-06-16 11:44:01"
+  },
+  {
+    "name": "51112219720609904X",
+    "username": "51112219720609904X",
+    "password": "Dhxx123456",
     "video_name": "眉山市2026年度专业技术人员继续教育公需科目",
     "is_head": 0,
     "start_index": 2,
@@ -11,6 +25,20 @@
     "requiredPeriod": "19.0",
     "electivePeriod": "30.1",
     "created_at": "",
-    "updated_at": "2025-07-31 15:14:07"
+    "updated_at": "2026-06-13 16:15:57"
+  },
+  {
+    "name": "haohao234",
+    "username": "haohao234",
+    "password": "%meimei234",
+    "video_name": "眉山市2026年度专业技术人员继续教育公需科目",
+    "is_head": 0,
+    "start_index": 2,
+    "no_play_videos": [],
+    "status": "2",
+    "requiredPeriod": "19.0",
+    "electivePeriod": "30.1",
+    "created_at": "",
+    "updated_at": "2026-06-16 11:26:50"
   }
 ]

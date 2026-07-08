@@ -296,7 +296,10 @@ class TeacherTrainingChecker:
             self.driver.get(f"{base_url}")
             time.sleep(2)
             # 必修
-            new_url = f"https://web.scgb.gov.cn/#/course?id={course['id']}&className="
+            if course['classId']:
+                new_url = f"https://web.scgb.gov.cn/#/course?id={course['id']}&className=&classId={course['classId']}"
+            else:
+                new_url = f"https://web.scgb.gov.cn/#/course?id={course['id']}&className="
             logger.info(f"{self.nickName}打开页面：{new_url}")
             self.driver.get(f"{new_url}")
             # 解析课程ID
@@ -643,7 +646,7 @@ class TeacherTrainingChecker:
             check_play_success_url = "https://api.scgb.gov.cn/api/services/app/course/app/getCourseDetailByUserId?"
             logger.info(f"{self.nickName}检测课程id: {self.current_course_id}")
             if self.courses:
-                payload = {"courseId": self.current_course_id}
+                payload = {"courseId": self.current_course_id, "classId": self.class_id}
             else:
                 payload = {"courseId": self.current_course_id, "classId": self.class_id}
             try:
@@ -751,7 +754,7 @@ class TeacherTrainingChecker:
         chrome_options.add_argument("--window-size=1920,1080")
 
         # 指定 ChromeDriver 的路径
-        chromedriver_path = "chromedriver.exe"
+        chromedriver_path = "../driver/chromedriver.exe"
 
         # 使用 Service 类来指定驱动路径
         service = Service(chromedriver_path)
@@ -1019,7 +1022,8 @@ class TeacherTrainingChecker:
             logger.info(f"未找到 中国干部网络学院 按钮，跳过，错误：{e}")
 
         # 打开课程目标页面
-        course_label = self.driver.find_element(By.XPATH, '//label[text()="树立和践行正确政绩观学习教育网上专题班"]')
+        # course_label = self.driver.find_element(By.XPATH, '//label[text()="树立和践行正确政绩观学习教育网上专题班"]')
+        course_label = self.driver.find_element(By.XPATH, '//a[contains(@data-url, "0318a246a8a84125b6a5660e6898adc4")]')
         self.switch_page(course_label)
         time.sleep(5)
 

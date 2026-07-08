@@ -392,16 +392,17 @@ def submit_phone_code():
 @app.route('/api/course_list', methods=['GET'])
 def course_list():
     id = request.args.get('id', '', type=str).strip()  # 支持模糊查询
-    current_task = ScgbTask.query.get_or_404(id)
-    check = running_tasks[current_task.username]
-    tasks = check.course_list()
-    logger.info(tasks)
+    # current_task = ScgbTask.query.get_or_404(id)
+    # check = running_tasks[current_task.username]
+    # tasks = check.course_list()
+    # logger.info(tasks)
     # 如果课程列表为空，查询自定义课程列表
-    data = tasks['result']['records']
-    if not data:
-        new_data = [course.to_dict() for course in ScgbCourse.query.all()]
-    else:
-        new_data = [{'id': item['id'], 'class_id': item['id'], 'name': item['name']} for item in data]
+    # data = tasks['result']['records']
+    new_data = [course.to_dict() for course in ScgbCourse.query.all()]
+    # if not data:
+    #     new_data = [course.to_dict() for course in ScgbCourse.query.all()]
+    # else:
+    #     new_data = [{'id': item['id'], 'class_id': item['id'], 'name': item['name']} for item in data]
 
     return jsonify({'code': 200, 'data': new_data, 'msg': ''})
 

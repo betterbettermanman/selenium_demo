@@ -22,3 +22,6 @@ png/
 *.spec
 
 .claude/**
+
+**/browser_data/*
+**/node_modules/*
