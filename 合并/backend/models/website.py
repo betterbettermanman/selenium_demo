@@ -9,6 +9,7 @@ class Website(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), default='', comment='网站名称')
     code = db.Column(db.String(100), comment='网站编码')
+    url = db.Column(db.String(512), comment='网站URL')
     enable_sms_code = db.Column(db.String(8), default='0', comment='是否启用手机验证码（1：启用，0：不启用）')
     remark = db.Column(db.String(100), comment='备注')
     create_time = db.Column(db.DateTime, default=datetime.now, comment='创建日期')
@@ -19,6 +20,7 @@ class Website(db.Model):
             'id': self.id,
             'name': self.name,
             'code': self.code,
+            'url': self.url,
             'enable_sms_code': self.enable_sms_code,
             'remark': self.remark,
             'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S') if self.create_time else None,

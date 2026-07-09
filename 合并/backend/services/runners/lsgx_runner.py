@@ -74,6 +74,8 @@ class LsgxTaskRunner(SeleniumTaskRunner):
         try:
             self.driver.get(LSGX_HOME_URL)
             time.sleep(3)
+            self._log_info('尝试登录 user=%s', self.task.username)
+            self._auto_login()
         except Exception as exc:
             self._log_info("打开网站失败")
         for idx in range(max_rounds):

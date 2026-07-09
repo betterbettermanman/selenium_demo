@@ -1,4 +1,8 @@
-from flask import Blueprint, request, current_app
+import io
+from datetime import datetime
+
+from flask import Blueprint, request, current_app, send_file, make_response
+from openpyxl import Workbook
 
 from models import db
 from models.course import Course
@@ -36,6 +40,44 @@ def _enrich_task_dict(task_dict):
     )
     task_dict['enable_sms_code'] = website.enable_sms_code if website else '0'
     return task_dict
+
+
+def _enrich_task_dict_export(task_dict):
+    website = Website.query.filter_by(code=task_dict.get('website_code')).first()
+    course = None
+    if task_dict.get('class_id') and task_dict.get('website_code'):
+        course = Course.query.filter_by(
+            class_id=task_dict['class_id'],
+            website_code=task_dict['website_code'],
+        ).first()
+    task_dict['website_name'] = website.name if website else ''
+    task_dict['course_name'] = course.name if course else ''
+    return task_dict
+
+
+def _build_task_query(keyword='', status=''):
+    query = Task.query
+    if keyword:
+        kw = f'%{keyword}%'
+        query = query.outerjoin(Website, Task.website_code == Website.code)
+        query = query.outerjoin(
+            Course,
+            db.and_(Task.class_id == Course.class_id, Task.website_code == Course.website_code),
+        )
+        query = query.filter(
+            db.or_(
+                Task.nick_name.like(kw),
+                Task.username.like(kw),
+                Task.organ_name.like(kw),
+                Task.website_code.like(kw),
+                Task.remark.like(kw),
+                Website.name.like(kw),
+                Course.name.like(kw),
+            )
+        ).distinct()
+    if status:
+        query = query.filter(Task.status == status)
+    return query.order_by(Task.id.desc())
 
 
 def _parse_is_charged(value) -> str:
@@ -81,21 +123,9 @@ def list_tasks():
     keyword = request.args.get('keyword', '', type=str).strip()
     status = request.args.get('status', '', type=str).strip()
 
-    query = Task.query
-    if keyword:
-        query = query.filter(
-            db.or_(
-                Task.nick_name.like(f'%{keyword}%'),
-                Task.username.like(f'%{keyword}%'),
-                Task.organ_name.like(f'%{keyword}%'),
-                Task.website_code.like(f'%{keyword}%'),
-                Task.remark.like(f'%{keyword}%'),
-            )
-        )
-    if status:
-        query = query.filter(Task.status == status)
+    query = _build_task_query(keyword, status)
 
-    pagination = query.order_by(Task.id.desc()).paginate(
+    pagination = query.paginate(
         page=page, per_page=page_size, error_out=False
     )
 
@@ -109,6 +139,54 @@ def list_tasks():
         },
         'message': 'success',
     }
+
+
+@task_bp.route('/export', methods=['GET'])
+def export_tasks():
+    keyword = request.args.get('keyword', '', type=str).strip()
+    status = request.args.get('status', '', type=str).strip()
+    tasks = _build_task_query(keyword, status).all()
+
+    headers = [
+        'ID', '网站名称', '课程名称', '姓名', '单位名称', '账号', '密码',
+        '无头模式', '是否收费', '价格', '状态', '备注', '创建时间', '更新时间',
+    ]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '任务列表'
+    ws.append(headers)
+
+    for item in tasks:
+        row = _enrich_task_dict_export(item.to_dict())
+        ws.append([
+            row.get('id', ''),
+            row.get('website_name', ''),
+            row.get('course_name', ''),
+            row.get('nick_name', ''),
+            row.get('organ_name', ''),
+            row.get('username', ''),
+            row.get('password', ''),
+            '无头' if row.get('is_head') == '1' else '有头',
+            '是' if row.get('is_charged') == '1' else '否',
+            row.get('price') if row.get('price') is not None else '',
+            '完成' if row.get('status') == '2' else '未完成',
+            row.get('remark', ''),
+            row.get('create_time', ''),
+            row.get('update_time', ''),
+        ])
+
+    mem = io.BytesIO()
+    wb.save(mem)
+    mem.seek(0)
+    filename = f'任务列表_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    response = make_response(send_file(
+        mem,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    ))
+    response.headers['X-Total-Count'] = str(len(tasks))
+    return response
 
 
 @task_bp.route('/<int:item_id>', methods=['GET'])

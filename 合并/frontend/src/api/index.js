@@ -8,6 +8,9 @@ const request = axios.create({
 
 request.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob') {
+      return response
+    }
     const res = response.data
     if (res.code !== 200) {
       message.error(res.message || '请求失败')
@@ -33,6 +36,7 @@ export const websiteApi = {
   create: (data) => request.post('/websites', data),
   update: (id, data) => request.put(`/websites/${id}`, data),
   delete: (id) => request.delete(`/websites/${id}`),
+  openBrowser: (id) => request.post(`/websites/${id}/open-browser`, null, { timeout: 120000 }),
 }
 
 export const courseApi = {
@@ -52,6 +56,7 @@ export const taskApi = {
   submitSmsCode: (id, code) => request.post(`/tasks/${id}/sms-code`, { code }, { timeout: 60000 }),
   resendSmsCode: (id) => request.post(`/tasks/${id}/resend-sms`, null, { timeout: 30000 }),
   stop: (id) => request.post(`/tasks/${id}/stop`, null, { timeout: 30000 }),
+  export: (params) => request.get('/tasks/export', { params, responseType: 'blob' }),
 }
 
 export default request

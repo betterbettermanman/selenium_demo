@@ -20,7 +20,10 @@
           <a-select-option value="2">完成</a-select-option>
         </a-select>
       </a-space>
-      <a-button type="primary" @click="openModal()">新增任务</a-button>
+      <a-space>
+        <a-button :loading="exporting" @click="handleExport">导出</a-button>
+        <a-button type="primary" @click="openModal()">新增任务</a-button>
+      </a-space>
     </div>
 
     <a-table
@@ -239,6 +242,7 @@ const columns = [
 ]
 
 const loading = ref(false)
+const exporting = ref(false)
 const submitting = ref(false)
 const courseLoading = ref(false)
 const dataList = ref([])
@@ -324,6 +328,51 @@ const fetchList = async () => {
 const handleSearch = () => {
   pagination.current = 1
   fetchList()
+}
+
+const parseBlobError = async (blob) => {
+  try {
+    const text = await blob.text()
+    const data = JSON.parse(text)
+    return data.message || '导出失败'
+  } catch {
+    return '导出失败'
+  }
+}
+
+const handleExport = async () => {
+  exporting.value = true
+  try {
+    const response = await taskApi.export({
+      keyword: keyword.value,
+      status: statusFilter.value || '',
+    })
+    const blob = response.data
+    if (blob.type?.includes('application/json')) {
+      message.error(await parseBlobError(blob))
+      return
+    }
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const disposition = response.headers['content-disposition'] || ''
+    const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)
+    link.download = match ? decodeURIComponent(match[1].replace(/"/g, '')) : `任务列表_${Date.now()}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    const count = response.headers['x-total-count']
+    message.success(count ? `已导出 ${count} 条任务` : '导出成功')
+  } catch (error) {
+    if (error.response?.data instanceof Blob) {
+      message.error(await parseBlobError(error.response.data))
+    } else {
+      message.error(error.message || '导出失败')
+    }
+  } finally {
+    exporting.value = false
+  }
 }
 
 const handleTableChange = (pag) => {

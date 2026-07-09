@@ -3,7 +3,7 @@
     <div class="toolbar">
       <a-input-search
         v-model:value="keyword"
-        placeholder="搜索网站名称/编码/备注"
+        placeholder="搜索网站名称/编码/URL/备注"
         style="width: 280px"
         allow-clear
         @search="handleSearch"
@@ -16,10 +16,23 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
+      :scroll="{ x: 1200 }"
       row-key="id"
       @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'url'">
+          <a
+            v-if="record.url"
+            :href="record.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="url-link"
+          >
+            {{ record.url }}
+          </a>
+          <span v-else>-</span>
+        </template>
         <template v-if="column.key === 'enable_sms_code'">
           <a-tag :color="record.enable_sms_code === '1' ? 'green' : 'default'">
             {{ record.enable_sms_code === '1' ? '启用' : '不启用' }}
@@ -27,6 +40,15 @@
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
+            <a-button
+              type="link"
+              size="small"
+              :loading="openingId === record.id"
+              :disabled="!record.url"
+              @click="handleOpenBrowser(record)"
+            >
+              打开网站
+            </a-button>
             <a-button type="link" size="small" @click="openModal(record)">编辑</a-button>
             <a-popconfirm title="确定删除该网站吗？" @confirm="handleDelete(record.id)">
               <a-button type="link" danger size="small">删除</a-button>
@@ -39,6 +61,7 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingId ? '编辑网站' : '新增网站'"
+      width="560px"
       @ok="handleSubmit"
       :confirm-loading="submitting"
     >
@@ -48,6 +71,9 @@
         </a-form-item>
         <a-form-item label="网站编码">
           <a-input v-model:value="form.code" placeholder="请输入网站编码" />
+        </a-form-item>
+        <a-form-item label="网站 URL">
+          <a-input v-model:value="form.url" placeholder="https://example.com" />
         </a-form-item>
         <a-form-item label="是否启用手机验证码">
           <a-select v-model:value="form.enable_sms_code">
@@ -69,23 +95,24 @@ import { message } from 'ant-design-vue'
 import { websiteApi } from '../api'
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
-  { title: '网站名称', dataIndex: 'name', key: 'name' },
-  { title: '网站编码', dataIndex: 'code', key: 'code' },
-  { title: '手机验证码', key: 'enable_sms_code', width: 110 },
-  { title: '备注', dataIndex: 'remark', key: 'remark' },
-  { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 180 },
-  { title: '更新时间', dataIndex: 'update_time', key: 'update_time', width: 180 },
-  { title: '操作', key: 'action', width: 150 },
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 70, fixed: 'left' },
+  { title: '网站名称', dataIndex: 'name', key: 'name', width: 140 },
+  { title: '网站编码', dataIndex: 'code', key: 'code', width: 100 },
+  { title: '网站 URL', key: 'url', width: 220, ellipsis: true },
+  { title: '手机验证码', key: 'enable_sms_code', width: 100 },
+  { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
+  { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
+  { title: '操作', key: 'action', width: 220, fixed: 'right' },
 ]
 
 const loading = ref(false)
 const submitting = ref(false)
+const openingId = ref(null)
 const dataList = ref([])
 const keyword = ref('')
 const modalVisible = ref(false)
 const editingId = ref(null)
-const form = reactive({ name: '', code: '', enable_sms_code: '0', remark: '' })
+const form = reactive({ name: '', code: '', url: '', enable_sms_code: '0', remark: '' })
 
 const pagination = reactive({
   current: 1,
@@ -125,6 +152,7 @@ const openModal = (record = null) => {
   editingId.value = record?.id || null
   form.name = record?.name || ''
   form.code = record?.code || ''
+  form.url = record?.url || ''
   form.enable_sms_code = record?.enable_sms_code || '0'
   form.remark = record?.remark || ''
   modalVisible.value = true
@@ -137,17 +165,36 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   try {
+    const payload = {
+      ...form,
+      url: form.url.trim(),
+    }
     if (editingId.value) {
-      await websiteApi.update(editingId.value, { ...form })
+      await websiteApi.update(editingId.value, payload)
       message.success('更新成功')
     } else {
-      await websiteApi.create({ ...form })
+      await websiteApi.create(payload)
       message.success('创建成功')
     }
     modalVisible.value = false
     fetchList()
   } finally {
     submitting.value = false
+  }
+}
+
+const handleOpenBrowser = async (record) => {
+  if (!record.url) {
+    message.warning('请先配置网站 URL')
+    return
+  }
+  openingId.value = record.id
+  try {
+    const res = await websiteApi.openBrowser(record.id)
+    message.success(res.message || '浏览器已打开')
+    fetchList()
+  } finally {
+    openingId.value = null
   }
 }
 
@@ -165,5 +212,9 @@ onMounted(fetchList)
   display: flex;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.url-link {
+  word-break: break-all;
 }
 </style>
