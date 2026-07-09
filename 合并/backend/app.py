@@ -8,6 +8,7 @@ from models import db
 from routes.website import website_bp
 from routes.course import course_bp
 from routes.task import task_bp
+from routes.user_account import user_account_bp
 import services.runners  # noqa: F401  注册任务执行器
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
@@ -24,6 +25,7 @@ def create_app():
     app.register_blueprint(website_bp)
     app.register_blueprint(course_bp)
     app.register_blueprint(task_bp)
+    app.register_blueprint(user_account_bp)
     _register_frontend_routes(app)
 
     return app

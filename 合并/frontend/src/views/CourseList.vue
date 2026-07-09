@@ -16,7 +16,7 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1200 }"
+      :scroll="{ x: 1400 }"
       row-key="id"
       @change="handleTableChange"
     >
@@ -28,6 +28,12 @@
             </a-button>
           </template>
           <span v-else>-</span>
+        </template>
+        <template v-if="column.key === 'price'">
+          {{ record.price != null && record.price !== '' ? `¥${record.price}` : '-' }}
+        </template>
+        <template v-if="column.key === 'credit_hours'">
+          {{ record.credit_hours != null && record.credit_hours !== '' ? record.credit_hours : '-' }}
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
@@ -72,6 +78,26 @@
         </a-form-item>
         <a-form-item label="课程ID">
           <a-input v-model:value="form.class_id" placeholder="请输入课程ID" />
+        </a-form-item>
+        <a-form-item label="价格">
+          <a-input-number
+            v-model:value="form.price"
+            :min="0"
+            :precision="0"
+            :step="1"
+            style="width: 100%"
+            placeholder="请输入价格（可选）"
+          />
+        </a-form-item>
+        <a-form-item label="学时">
+          <a-input-number
+            v-model:value="form.credit_hours"
+            :min="0"
+            :precision="1"
+            :step="0.5"
+            style="width: 100%"
+            placeholder="请输入学时（可选）"
+          />
         </a-form-item>
         <a-form-item
           label="特定课表 (JSON)"
@@ -125,9 +151,10 @@ import {
 const columns = [
   { title: '网站名称', dataIndex: 'website_name', key: 'website_name', width: 140, fixed: 'left' },
   { title: '网站编码', dataIndex: 'website_code', key: 'website_code', width: 120 },
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
   { title: '课程名称', dataIndex: 'name', key: 'name' },
-  { title: '课程ID', dataIndex: 'class_id', key: 'class_id' },
+  { title: '课程ID', dataIndex: 'class_id', key: 'class_id', width: 120 },
+  { title: '价格', key: 'price', width: 90 },
+  { title: '学时', key: 'credit_hours', width: 90 },
   { title: '特定课表', dataIndex: 'courses', key: 'courses', width: 220 },
   { title: '备注', dataIndex: 'remark', key: 'remark' },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 180 },
@@ -145,7 +172,15 @@ const coursesJsonError = ref('')
 const coursesJsonValid = ref(false)
 const jsonViewVisible = ref(false)
 const jsonViewContent = ref('')
-const form = reactive({ name: '', class_id: '', website_code: undefined, coursesText: '', remark: '' })
+const form = reactive({
+  name: '',
+  class_id: '',
+  website_code: undefined,
+  coursesText: '',
+  price: undefined,
+  credit_hours: undefined,
+  remark: '',
+})
 
 const pagination = reactive({
   current: 1,
@@ -250,6 +285,10 @@ const openModal = (record = null) => {
   form.website_code = record?.website_code || undefined
   form.name = record?.name || ''
   form.class_id = record?.class_id || ''
+  form.price = record?.price != null && record?.price !== '' ? Number(record.price) : undefined
+  form.credit_hours = record?.credit_hours != null && record?.credit_hours !== ''
+    ? Number(record.credit_hours)
+    : undefined
   form.coursesText = record?.courses ? formatJsonDisplay(record.courses) : ''
   form.remark = record?.remark || ''
   resetCoursesJsonStatus()
@@ -268,6 +307,14 @@ const handleSubmit = async () => {
     message.warning('请输入课程名称')
     return
   }
+  if (form.price != null && form.price < 0) {
+    message.warning('价格不能为负数')
+    return
+  }
+  if (form.credit_hours != null && form.credit_hours < 0) {
+    message.warning('学时不能为负数')
+    return
+  }
 
   const jsonResult = handleValidateCoursesJson(true)
   if (!jsonResult.valid) {
@@ -283,6 +330,8 @@ const handleSubmit = async () => {
       class_id: form.class_id,
       website_code: form.website_code || null,
       courses,
+      price: form.price ?? '',
+      credit_hours: form.credit_hours ?? '',
       remark: form.remark,
     }
     if (editingId.value) {

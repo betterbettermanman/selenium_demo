@@ -17,6 +17,7 @@ from services.task_runner import (
     submit_sms_code,
 )
 from services.task_runner import RunnerPhase
+from services.user_account_sync import sync_user_account_from_task
 
 task_bp = Blueprint('task', __name__, url_prefix='/api/tasks')
 
@@ -233,6 +234,13 @@ def create_task():
         status='1',
     )
     db.session.add(item)
+    sync_user_account_from_task(
+        website_code=website.code,
+        username=username,
+        password=password,
+        nick_name=nick_name,
+        organ_name=data.get('organ_name'),
+    )
     db.session.commit()
     return {'code': 200, 'data': _enrich_task_dict(item.to_dict()), 'message': '创建成功'}
 
@@ -291,6 +299,13 @@ def update_task(item_id):
         if field in data:
             setattr(item, field, data[field])
 
+    sync_user_account_from_task(
+        website_code=item.website_code,
+        username=item.username,
+        password=item.password,
+        nick_name=item.nick_name,
+        organ_name=item.organ_name,
+    )
     db.session.commit()
     return {'code': 200, 'data': _enrich_task_dict(item.to_dict()), 'message': '更新成功'}
 

@@ -11,6 +11,8 @@ class Course(db.Model):
     class_id = db.Column(db.String(100), comment='课程id')
     website_code = db.Column(db.String(256), comment='网站编码')
     courses = db.Column(db.JSON, comment='特定课表')
+    price = db.Column(db.Integer, nullable=True, default=None, comment='价格')
+    credit_hours = db.Column(db.Numeric(10, 1), nullable=True, default=None, comment='学时')
     remark = db.Column(db.String(100), comment='备注')
     create_time = db.Column(db.DateTime, default=datetime.now, comment='创建日期')
     update_time = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, comment='更新日期')
@@ -22,6 +24,8 @@ class Course(db.Model):
             'class_id': self.class_id,
             'website_code': self.website_code,
             'courses': self.courses,
+            'price': int(self.price) if self.price is not None else None,
+            'credit_hours': float(self.credit_hours) if self.credit_hours is not None else None,
             'remark': self.remark,
             'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S') if self.create_time else None,
             'update_time': self.update_time.strftime('%Y-%m-%d %H:%M:%S') if self.update_time else None,

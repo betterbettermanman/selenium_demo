@@ -22,6 +22,30 @@ def _validate_course_payload(data):
     return None
 
 
+def _parse_price(value):
+    if value is None or value == '':
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return False
+    if num < 0 or num != int(num):
+        return False
+    return int(num)
+
+
+def _parse_credit_hours(value):
+    if value is None or value == '':
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return False
+    if num < 0:
+        return False
+    return round(num, 1)
+
+
 @course_bp.route('', methods=['GET'])
 def list_courses():
     page = request.args.get('page', 1, type=int)
@@ -81,11 +105,19 @@ def create_course():
     error = _validate_course_payload(data)
     if error:
         return error
+    price = _parse_price(data.get('price'))
+    if price is False:
+        return {'code': 400, 'message': '价格须为非负整数'}, 400
+    credit_hours = _parse_credit_hours(data.get('credit_hours'))
+    if credit_hours is False:
+        return {'code': 400, 'message': '学时须为非负数'}, 400
     item = Course(
         name=data.get('name', ''),
         class_id=data.get('class_id'),
         website_code=data.get('website_code'),
         courses=data.get('courses'),
+        price=price,
+        credit_hours=credit_hours,
         remark=data.get('remark'),
     )
     db.session.add(item)
@@ -112,6 +144,16 @@ def update_course(item_id):
         item.website_code = data['website_code']
     if 'courses' in data:
         item.courses = data['courses']
+    if 'price' in data:
+        price = _parse_price(data.get('price'))
+        if price is False:
+            return {'code': 400, 'message': '价格须为非负整数'}, 400
+        item.price = price
+    if 'credit_hours' in data:
+        credit_hours = _parse_credit_hours(data.get('credit_hours'))
+        if credit_hours is False:
+            return {'code': 400, 'message': '学时须为非负数'}, 400
+        item.credit_hours = credit_hours
     if 'remark' in data:
         item.remark = data['remark']
 

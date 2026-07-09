@@ -59,4 +59,11 @@ export const taskApi = {
   export: (params) => request.get('/tasks/export', { params, responseType: 'blob' }),
 }
 
+export const userAccountApi = {
+  list: (params) => request.get('/user-accounts', { params }),
+  create: (data) => request.post('/user-accounts', data),
+  update: (id, data) => request.put(`/user-accounts/${id}`, data),
+  delete: (id) => request.delete(`/user-accounts/${id}`),
+}
+
 export default request
