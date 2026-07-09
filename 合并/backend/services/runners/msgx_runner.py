@@ -4,17 +4,13 @@
 网站编码：MSGX
 参考：selenium_demo/眉山市专业技术人员网络培训网/main.py
 """
-import logging
-import os
 import re
 import threading
 import time
 from urllib.parse import unquote
 
-from models import db
-from services.task_runner import BaseTaskRunner, register_runner, update_task_fields
-
-logger = logging.getLogger(__name__)
+from services.task_runner import register_runner, update_task_fields
+from services.runners.selenium_runner import SeleniumTaskRunner
 
 MSGX_LOGIN_URL = 'http://meishan.scjxjypx.com/'
 CHINAHRT_TRAIN_LIST = 'https://gp.chinahrt.com/index.html#/v_trainplan_list'
@@ -23,13 +19,11 @@ CHINAHRT_COURSE_DETAIL_API = 'https://gp.chinahrt.com/gp6/lms/stu/course/courseD
 
 
 @register_runner('MSGX')
-class MsgxTaskRunner(BaseTaskRunner):
+class MsgxTaskRunner(SeleniumTaskRunner):
     """眉山市专业技术人员网络培训网执行器。"""
 
     def __init__(self, task, website):
         super().__init__(task, website)
-        self.is_complete = False
-        self.is_running = True
         self.current_course_id = ''
         self.trainplan_id = ''
         self.platform_id = ''
@@ -39,16 +33,12 @@ class MsgxTaskRunner(BaseTaskRunner):
             'Accept': '*/*',
             'Host': 'gp.chinahrt.com',
         }
-        self._monitor_thread = None
         self._play_status_thread = None
 
     def run_main(self):
-        logger.info(
-            '[MSGX] 开始任务 id=%s user=%s course=%s headless=%s',
-            self.task.id,
-            self.task.username,
-            self._get_target_course_name(),
-            self.task.is_head,
+        self._log_info(
+            '开始任务 id=%s user=%s course=%s headless=%s',
+            self.task.id, self.task.username, self._get_target_course_name(), self.task.is_head,
         )
         try:
             self._init_browser()
@@ -56,81 +46,22 @@ class MsgxTaskRunner(BaseTaskRunner):
             result = self._open_home()
             if result == 'course':
                 self._start_monitors()
-                while self.is_running and not self.is_complete:
-                    time.sleep(1)
+                self._wait_until_complete()
             elif result == 'complete':
                 self.is_complete = True
-
-            if self.is_complete and not self._stopped:
-                update_task_fields(self.task, status='2')
-                logger.info('[MSGX] 任务 id=%s 执行完成', self.task.id)
-            elif not self._stopped:
-                update_task_fields(self.task, status='1')
+            self._sync_task_status()
         except Exception:
-            logger.exception('[MSGX] 任务 id=%s 执行失败', self.task.id)
-            db.session.rollback()
-            update_task_fields(self.task, status='1')
+            self._log_exception('任务 id=%s 执行失败', self.task.id)
+            self._handle_run_exception()
             raise
         finally:
-            self.is_running = False
-            self._cleanup()
+            self._finalize_run()
 
-    def _get_target_course_name(self) -> str:
-        raw = self.task.courses
-        if isinstance(raw, dict) and raw.get('name'):
-            return str(raw['name']).strip()
-        if isinstance(raw, list):
-            for item in raw:
-                if isinstance(item, dict) and item.get('name'):
-                    return str(item['name']).strip()
-                if isinstance(item, str) and item.strip():
-                    return item.strip()
-        if self.task.remark:
-            return self.task.remark.strip()
-        return ''
-
-    def _init_browser(self):
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import Options
-            from selenium.webdriver.chrome.service import Service
-        except ImportError as exc:
-            raise RuntimeError('请先安装 selenium: pip install selenium') from exc
-
-        user_data_dir = os.path.join(
-            os.getcwd(), 'browser_data', 'MSGX', str(self.task.id), self.task.username
-        )
-        os.makedirs(user_data_dir, exist_ok=True)
-
-        options = Options()
-        if self.task.is_head == '1':
-            options.add_argument('--headless=new')
-        options.add_argument(f'--user-data-dir={user_data_dir}')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--start-maximized')
-        options.add_argument('--no-sandbox')
-
-        chromedriver_path = os.getenv('CHROMEDRIVER_PATH', '../driver/chromedriver.exe')
-        service = Service(chromedriver_path) if os.path.exists(chromedriver_path) else Service()
-
-        self.driver = webdriver.Chrome(service=service, options=options)
-        self.driver.maximize_window()
-        self.driver.implicitly_wait(10)
-        logger.info('[MSGX] 浏览器已启动')
-
-    def _get_session_storage(self, key: str):
-        try:
-            return self.driver.execute_script(f"return window.sessionStorage.getItem('{key}');")
-        except Exception:
-            return None
-
-    def _is_logged_in(self) -> bool:
-        token = self._get_session_storage('jwtToken')
-        if token:
-            self.jwt_token = token
-            self.headers['hrttoken'] = token
-            return True
-        return False
+    def _sync_user_profile(self):
+        real_name = self._get_session_storage('realName') or ''
+        organ_name = self._get_session_storage('orgName') or ''
+        update_task_fields(self.task, nick_name=real_name, organ_name=organ_name)
+        self._log_info('已登录 %s【%s】', real_name, organ_name)
 
     def _ensure_logged_in(self, max_rounds=5):
         for idx in range(max_rounds):
@@ -139,13 +70,18 @@ class MsgxTaskRunner(BaseTaskRunner):
             self.driver.get(CHINAHRT_USER_SET)
             time.sleep(2)
             if self._is_logged_in():
-                real_name = self._get_session_storage('realName') or ''
-                organ_name = self._get_session_storage('orgName') or ''
-                update_task_fields(self.task, nick_name=real_name, organ_name=organ_name)
-                logger.info('[MSGX] 已登录 %s【%s】', real_name, organ_name)
+                self._sync_user_profile()
                 return
-            logger.warning('[MSGX] 第 %s 次登录未成功', idx + 1)
+            self._log_warning('第 %s 次登录未成功', idx + 1)
         raise RuntimeError('登录失败，请检查账号密码或验证码')
+
+    def _is_logged_in(self) -> bool:
+        token = self._get_session_storage('jwtToken')
+        if token:
+            self.jwt_token = token
+            self.headers['hrttoken'] = token
+            return True
+        return False
 
     def _auto_login(self):
         from selenium.common import ElementNotInteractableException, TimeoutException
@@ -176,9 +112,9 @@ class MsgxTaskRunner(BaseTaskRunner):
                 By.XPATH,
                 '//button[@class="el-button logbtn cb mt5 el-button--default el-button--small"]',
             ).click()
-            logger.info('[MSGX] 登录表单已提交')
+            self._log_info('登录表单已提交')
         except (TimeoutException, ElementNotInteractableException):
-            logger.exception('[MSGX] 登录失败')
+            self._log_exception('登录失败')
             raise
         finally:
             self.driver.switch_to.default_content()
@@ -192,24 +128,12 @@ class MsgxTaskRunner(BaseTaskRunner):
             img = WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, '//img[@alt="验证码"]'))
             )
-            os.makedirs('png', exist_ok=True)
-            save_path = os.path.join('png', f'msgx_{self.task.username}.png')
-            if not img.screenshot(save_path):
-                return ''
-            try:
-                import ddddocr
-                ocr = ddddocr.DdddOcr()
-                with open(save_path, 'rb') as f:
-                    return ocr.classification(f.read())
-            except ImportError:
-                logger.warning('[MSGX] 未安装 ddddocr')
-                return ''
+            return self._recognize_captcha_screenshot(img, f'msgx_{self.task.username}.png')
         except Exception:
-            logger.exception('[MSGX] 验证码识别失败')
+            self._log_exception('验证码识别失败')
             return ''
 
     def _open_home(self) -> str:
-        """打开培训计划列表，处理激活/学习/考试。返回 course / exam / complete。"""
         from selenium.common import NoSuchElementException
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
@@ -218,7 +142,7 @@ class MsgxTaskRunner(BaseTaskRunner):
         if self.is_complete:
             return 'complete'
 
-        logger.info('[MSGX] 打开培训计划列表')
+        self._log_info('打开培训计划列表')
         self.driver.get(CHINAHRT_TRAIN_LIST)
         time.sleep(5)
 
@@ -231,17 +155,17 @@ class MsgxTaskRunner(BaseTaskRunner):
         for parent in parents:
             course_div = parent.find_element(By.CLASS_NAME, 'course-title')
             span_values = [s.text for s in course_div.find_elements(By.TAG_NAME, 'span')]
-            logger.info('[MSGX] 课程列表项: %s', span_values)
+            self._log_info('课程列表项: %s', span_values)
             if not target_name or target_name in span_values or any(target_name in v for v in span_values):
                 current_course = parent
                 break
 
         if current_course is None and parents:
             current_course = parents[0]
-            logger.info('[MSGX] 未匹配到指定课程名，使用第一项')
+            self._log_info('未匹配到指定课程名，使用第一项')
 
         if current_course is None:
-            logger.warning('[MSGX] 未找到课程')
+            self._log_warning('未找到课程')
             self.is_running = False
             return 'complete'
 
@@ -251,48 +175,47 @@ class MsgxTaskRunner(BaseTaskRunner):
         try:
             img_src = course_title.find_element(By.TAG_NAME, 'img').get_attribute('src') or ''
             if 'static/images/icon-label3.png' in img_src:
-                logger.info('[MSGX] 课程已完成标记')
+                self._log_info('课程已完成标记')
                 self.is_running = False
                 self.is_complete = True
                 return 'complete'
         except NoSuchElementException:
             pass
 
-        video_process = column_wrap.find_elements(By.CLASS_NAME, 'el-progress__text')
-        if video_process and video_process[0].text != '已学100%':
-            try:
-                column_wrap.find_element(By.XPATH, ".//button[contains(text(), '去激活')]").click()
-                logger.info('[MSGX] 点击去激活')
-                time.sleep(5)
-                return self._open_home()
-            except NoSuchElementException:
-                pass
-            try:
-                column_wrap.find_element(
-                    By.XPATH,
-                    ".//button[contains(text(), '去学习') or contains(text(), '继续学习')]",
-                ).click()
-                logger.info('[MSGX] 进入课程学习')
-                self._open_course()
-                return 'course'
-            except NoSuchElementException:
-                logger.warning('[MSGX] 未找到学习按钮')
+        # video_process = column_wrap.find_elements(By.CLASS_NAME, 'el-progress__text')
+        # if video_process and video_process[0].text != '已学100%':
+        try:
+            column_wrap.find_element(By.XPATH, ".//button[contains(text(), '去激活')]").click()
+            self._log_info('点击去激活')
+            time.sleep(5)
+            return self._open_home()
+        except NoSuchElementException:
+            pass
+        try:
+            column_wrap.find_element(
+                By.XPATH,
+                ".//button[contains(text(), '去学习') or contains(text(), '继续学习')]",
+            ).click()
+            self._log_info('进入课程学习')
+            self._open_course()
+            return 'course'
+        except NoSuchElementException:
+            self._log_warning('未找到学习按钮')
 
-        if len(video_process) > 1 and video_process[1].text != '已考100%':
-            try:
-                column_wrap.find_element(By.XPATH, ".//button[contains(text(), '去考试')]").click()
-                logger.info('[MSGX] 进入考试（需人工或后续扩展自动答题）')
-                return 'exam'
-            except NoSuchElementException:
-                pass
+        # if len(video_process) > 1 and video_process[1].text != '已考100%':
+        try:
+            column_wrap.find_element(By.XPATH, ".//button[contains(text(), '去考试')]").click()
+            self._log_info('进入考试（需人工或后续扩展自动答题）')
+            return 'exam'
+        except NoSuchElementException:
+            pass
 
-        logger.info('[MSGX] 当前培养计划项已处理完毕')
+        self._log_info('当前培养计划项已处理完毕')
         self.is_running = False
         self.is_complete = True
         return 'complete'
 
     def _open_course(self):
-        """打开课程目录并进入第一个未完成小节播放。"""
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
@@ -311,7 +234,8 @@ class MsgxTaskRunner(BaseTaskRunner):
             if progress == '100%':
                 continue
             WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable(li.find_element(By.CSS_SELECTOR, 'div'))).click()
+                EC.element_to_be_clickable(li.find_element(By.CSS_SELECTOR, 'div'))
+            ).click()
             break
 
         original_window = self.driver.current_window_handle
@@ -358,24 +282,19 @@ class MsgxTaskRunner(BaseTaskRunner):
         self.current_course_id = self._extract_hash_param(self.driver.current_url, 'courseId') or ''
         self.trainplan_id = self._extract_hash_param(self.driver.current_url, 'trainplanId') or ''
         self.platform_id = self._extract_hash_param(self.driver.current_url, 'platformId') or ''
-        logger.info('[MSGX] 开始播放 courseId=%s', self.current_course_id)
+        self._log_info('开始播放 courseId=%s', self.current_course_id)
 
     def _extract_hash_param(self, url: str, param_name: str) -> str:
         match = re.search(rf'{param_name}=([^&]+)', url)
         return unquote(match.group(1)) if match else ''
 
     def _start_monitors(self):
-        self._monitor_thread = threading.Thread(
-            target=self._check_course_success,
-            daemon=True,
-            name=f'msgx-monitor-{self.task.id}',
-        )
+        self._start_monitor_thread(self._check_course_success, suffix='monitor')
         self._play_status_thread = threading.Thread(
             target=self._check_course_play_status,
             daemon=True,
             name=f'msgx-play-{self.task.id}',
         )
-        self._monitor_thread.start()
         self._play_status_thread.start()
 
     def _check_course_success(self):
@@ -397,7 +316,7 @@ class MsgxTaskRunner(BaseTaskRunner):
                     )
                     detail = resp.json().get('data', {})
                     percent = detail.get('learnPercent', 0)
-                    logger.info('[MSGX] 课程 %s 学习进度: %s%%', self.current_course_id, percent)
+                    self._log_info('检测课程 %s 学习进度: %s%%', self.current_course_id, percent)
                     if percent == 100:
                         if len(self.driver.window_handles) > 1:
                             self.driver.close()
@@ -406,7 +325,7 @@ class MsgxTaskRunner(BaseTaskRunner):
                         threading.Thread(target=self._open_home, daemon=True).start()
                         sleep_time = 60
                 except Exception as exc:
-                    logger.warning('[MSGX] 查询课程进度失败: %s', exc)
+                    self._log_warning('查询课程进度失败: %s', exc)
                     sleep_time = 20
             time.sleep(sleep_time)
 
@@ -422,11 +341,8 @@ class MsgxTaskRunner(BaseTaskRunner):
                 element = WebDriverWait(self.driver, 5).until(
                     EC.presence_of_element_located((By.XPATH, '//span[text()="课程评价"]'))
                 )
-                # 判断是否可见（Selenium 内置方法）
-                is_displayed = element.is_displayed()
-                print(f"元素是否可见: {is_displayed}")
-                if is_displayed:
-                    logger.info('[MSGX] 检测到课程评价，当前小节完成')
+                if element.is_displayed():
+                    self._log_info('检测到课程评价，当前小节完成')
                     if len(self.driver.window_handles) > 1:
                         self.driver.close()
                         self.driver.switch_to.window(self.driver.window_handles[0])
@@ -443,15 +359,3 @@ class MsgxTaskRunner(BaseTaskRunner):
                     pause.click()
             except (TimeoutException, NoSuchElementException):
                 pass
-            except Exception as exc:
-                logger.debug('[MSGX] 播放状态检测: %s', exc)
-
-    def _cleanup(self):
-        if self.driver:
-            try:
-                self.driver.quit()
-                logger.info('[MSGX] 浏览器已关闭')
-            except Exception:
-                logger.exception('[MSGX] 关闭浏览器失败')
-            finally:
-                self.driver = None

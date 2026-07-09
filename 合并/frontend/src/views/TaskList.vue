@@ -28,7 +28,7 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1380 }"
+      :scroll="{ x: 1520 }"
       row-key="id"
       @change="handleTableChange"
     >
@@ -59,6 +59,14 @@
         </template>
         <template v-if="column.key === 'is_head'">
           {{ record.is_head === '1' ? '无头' : '有头' }}
+        </template>
+        <template v-if="column.key === 'is_charged'">
+          <a-tag :color="record.is_charged === '1' ? 'success' : 'error'">
+            {{ record.is_charged === '1' ? '是' : '否' }}
+          </a-tag>
+        </template>
+        <template v-if="column.key === 'price'">
+          {{ record.price != null && record.price !== '' ? `¥${record.price}` : '-' }}
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
@@ -149,6 +157,22 @@
         <a-form-item label="密码" required>
           <a-input-password v-model:value="form.password" placeholder="请输入密码" />
         </a-form-item>
+        <a-form-item label="是否收费">
+          <a-select v-model:value="form.is_charged">
+            <a-select-option value="0">否</a-select-option>
+            <a-select-option value="1">是</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="价格">
+          <a-input-number
+            v-model:value="form.price"
+            :min="0"
+            :precision="0"
+            :step="1"
+            style="width: 100%"
+            placeholder="请输入价格（可选）"
+          />
+        </a-form-item>
         <a-form-item label="浏览器无头模式">
           <a-select v-model:value="form.is_head">
             <a-select-option value="1">无头模式</a-select-option>
@@ -206,6 +230,8 @@ const columns = [
   { title: '账号', dataIndex: 'username', key: 'username', width: 120 },
   { title: '密码', dataIndex: 'password', key: 'password', width: 120, ellipsis: true },
   { title: '无头模式', key: 'is_head', width: 90 },
+  { title: '是否收费', key: 'is_charged', width: 90 },
+  { title: '价格', key: 'price', width: 90 },
   { title: '状态', key: 'status', width: 170 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
@@ -237,6 +263,8 @@ const form = reactive({
   username: '',
   password: '',
   is_head: '1',
+  is_charged: '0',
+  price: undefined,
   remark: '',
 })
 
@@ -311,6 +339,8 @@ const resetForm = () => {
   form.username = ''
   form.password = ''
   form.is_head = '1'
+  form.is_charged = '0'
+  form.price = undefined
   form.remark = ''
   courseOptions.value = []
 }
@@ -324,6 +354,8 @@ const openModal = async (record = null) => {
     form.username = record.username || ''
     form.password = record.password || ''
     form.is_head = record.is_head || '1'
+    form.is_charged = record.is_charged || '0'
+    form.price = record.price != null && record.price !== '' ? Number(record.price) : undefined
     form.remark = record.remark || ''
     if (form.website_id) {
       await fetchCoursesByWebsite(form.website_id, record.course_id || undefined)
@@ -349,6 +381,10 @@ const handleSubmit = async () => {
     message.warning('请输入密码')
     return
   }
+  if (form.price != null && form.price < 0) {
+    message.warning('价格不能为负数')
+    return
+  }
 
   submitting.value = true
   try {
@@ -359,6 +395,8 @@ const handleSubmit = async () => {
       username: form.username,
       password: form.password,
       is_head: form.is_head,
+      is_charged: form.is_charged,
+      price: form.price ?? '',
       remark: form.remark,
     }
     if (editingId.value) {

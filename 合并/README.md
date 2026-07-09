@@ -51,7 +51,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-后端默认运行在 `http://localhost:5000`
+后端默认运行在 `http://localhost:6001`
 
 ### 3. 启动前端
 

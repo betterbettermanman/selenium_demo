@@ -12,6 +12,8 @@ class Task(db.Model):
     username = db.Column(db.String(100), nullable=False, comment='账号')
     password = db.Column(db.String(100), nullable=False, comment='密码')
     is_head = db.Column(db.String(100), nullable=False, default='1', comment='是否浏览器无头模式（1：无头，0：有头）')
+    is_charged = db.Column(db.String(8), nullable=False, default='0', comment='是否收费（1：收费，0：不收费）')
+    price = db.Column(db.Integer, nullable=True, default=None, comment='价格')
     status = db.Column(db.String(8), default='1', comment='状态（1：未完成，2：完成）')
     no_play_videos = db.Column(db.JSON, comment='不播放列表')
     remark = db.Column(db.String(100), comment='备注')
@@ -29,6 +31,8 @@ class Task(db.Model):
             'username': self.username,
             'password': self.password,
             'is_head': self.is_head,
+            'is_charged': self.is_charged,
+            'price': int(self.price) if self.price is not None else None,
             'status': self.status,
             'no_play_videos': self.no_play_videos,
             'remark': self.remark,

@@ -38,6 +38,22 @@ def _enrich_task_dict(task_dict):
     return task_dict
 
 
+def _parse_is_charged(value) -> str:
+    return '1' if str(value) in ('1', 'true', 'True', True) else '0'
+
+
+def _parse_price(value):
+    if value is None or value == '':
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return False
+    if num < 0 or num != int(num):
+        return False
+    return int(num)
+
+
 def _resolve_website_and_course(website_id, course_id):
     if not website_id:
         return None, {'code': 400, 'message': '请选择网站'}, 400
@@ -110,6 +126,10 @@ def create_task():
     password = (data.get('password') or '').strip()
     remark = data.get('remark')
     nick_name = (data.get('nick_name') or '').strip()
+    is_charged = _parse_is_charged(data.get('is_charged', '0'))
+    price = _parse_price(data.get('price'))
+    if price is False:
+        return {'code': 400, 'message': '价格须为非负整数'}, 400
 
     if not username:
         return {'code': 400, 'message': '请输入账号'}, 400
@@ -130,6 +150,8 @@ def create_task():
         class_id=course.class_id,
         courses=course.courses,
         is_head=data.get('is_head', '1'),
+        is_charged=is_charged,
+        price=price,
         status='1',
     )
     db.session.add(item)
@@ -177,6 +199,14 @@ def update_task(item_id):
         item.password = password
     if 'remark' in data:
         item.remark = data['remark']
+
+    if 'is_charged' in data:
+        item.is_charged = _parse_is_charged(data.get('is_charged'))
+    if 'price' in data:
+        price = _parse_price(data.get('price'))
+        if price is False:
+            return {'code': 400, 'message': '价格须为非负整数'}, 400
+        item.price = price
 
     simple_fields = ['nick_name', 'organ_name', 'is_head', 'status', 'no_play_videos']
     for field in simple_fields:
