@@ -7,8 +7,8 @@
 import time
 from typing import Any
 
-from services.task_runner import register_runner, update_task_fields
 from services.runners.selenium_runner import SeleniumTaskRunner
+from services.task_runner import register_runner, update_task_fields
 
 LSGX_HOME_URL = 'https://www.ls1018.com.cn/'
 LSGX_DEFAULT_COURSE_URL = 'https://www.ls1018.com.cn/course/118.html'
@@ -67,17 +67,34 @@ class LsgxTaskRunner(SeleniumTaskRunner):
                 })
         return result
 
-    def _login(self):
+    def _is_logged_in(self) -> bool:
+        return bool(self.get_cookies_values('PHPSESSID'))
+
+    def _login(self, max_rounds=100):
+        try:
+            self.driver.get(LSGX_HOME_URL)
+            time.sleep(3)
+        except Exception as exc:
+            self._log_info("打开网站失败")
+        for idx in range(max_rounds):
+            if self._is_logged_in():
+                self._log_info('已登录 user=%s', self.task.username)
+                return
+            self._log_info('第 %s 次尝试登录 user=%s', idx + 1, self.task.username)
+            self._auto_login()
+            time.sleep(3)
+        if not self._is_logged_in():
+            raise RuntimeError('登录失败，请检查账号密码')
+
+    def _auto_login(self):
         from selenium.common import ElementNotInteractableException, TimeoutException
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
-
-        time.sleep(5)
-        self._log_info('打开首页 %s', LSGX_HOME_URL)
-        self.driver.get(LSGX_HOME_URL)
-        time.sleep(3)
         try:
+            self._log_info('打开首页 %s', LSGX_HOME_URL)
+            self.driver.get(LSGX_HOME_URL)
+            time.sleep(5)
             self.driver.find_element(By.LINK_TEXT, '登录').click()
 
             username_input = WebDriverWait(self.driver, 10).until(
@@ -143,7 +160,7 @@ class LsgxTaskRunner(SeleniumTaskRunner):
             ml_lists = self.driver.find_elements(By.CLASS_NAME, 'ml-list')
             if not ml_lists:
                 self._log_warning('未找到课程列表 ml-list')
-                return False
+                return True
 
             for item in ml_lists:
                 a_tag = item.find_element(By.CLASS_NAME, 'begin')
@@ -167,7 +184,7 @@ class LsgxTaskRunner(SeleniumTaskRunner):
             return False
         except Exception:
             self._log_exception('查找未完成课程失败')
-            return False
+            return True
 
     def _check_course_success(self):
         from selenium.webdriver.common.by import By

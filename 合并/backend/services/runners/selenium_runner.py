@@ -239,6 +239,18 @@ class SeleniumTaskRunner(BaseTaskRunner):
         except Exception:
             return None
 
+    def get_cookies_values(self, key: str):
+        """从浏览器 cookie 中按名称取值。"""
+        if not self.driver:
+            return None
+        try:
+            for cookie in self.driver.get_cookies():
+                if cookie.get('name') == key:
+                    return cookie.get('value')
+        except Exception:
+            self._log_exception('读取 cookie 失败 key=%s', key)
+        return None
+
     def _dismiss_confirm_dialog(self):
         from selenium.webdriver.common.by import By
 

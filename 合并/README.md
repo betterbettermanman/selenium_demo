@@ -51,7 +51,9 @@ pip install -r requirements.txt
 python app.py
 ```
 
-后端默认运行在 `http://localhost:6001`
+后端端口：
+- 开发模式 `http://localhost:6002`（`dev.bat` / `python app.py` + `FLASK_DEBUG=1`）
+- 打包生产 `http://localhost:6001`（`start.bat`）
 
 ### 3. 启动前端
 
@@ -62,6 +64,20 @@ npm run dev
 ```
 
 前端默认运行在 `http://localhost:5173`
+
+## 一键脚本（Windows）
+
+项目根目录提供三个批处理文件，双击即可运行：
+
+| 脚本 | 说明 |
+|------|------|
+| `dev.bat` | 开发模式：新开窗口启动后端(6002) + 前端 Vite(5173) |
+| `build.bat` | 打包：构建前端并复制到 `backend/static` |
+| `start.bat` | 生产模式：启动后端，同时托管前端页面（需先执行 build.bat） |
+
+生产环境访问地址：`http://localhost:6001`
+
+对应 PowerShell 脚本位于 `scripts/` 目录（`build.ps1` / `start.ps1` / `dev.ps1`）。
 
 ## API 接口
 

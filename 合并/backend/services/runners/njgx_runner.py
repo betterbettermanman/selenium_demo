@@ -7,9 +7,6 @@
 import time
 from typing import Any
 
-from selenium.common import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
 from services.runners.selenium_runner import SeleniumTaskRunner
 from services.task_runner import register_runner
 
@@ -231,7 +228,9 @@ class NjgxTaskRunner(SeleniumTaskRunner):
             return False
 
     def switch_to_playframe(self):
+        from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
         """
         切换到id为playframeNew的iframe
         """
@@ -250,7 +249,11 @@ class NjgxTaskRunner(SeleniumTaskRunner):
             return False
 
     def _check_course_success(self):
+        from selenium.common import TimeoutException
         from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+
         sleep_time = 10
         self._log_info('开始监听播放进度 user=%s', self.task.username)
 
@@ -271,8 +274,6 @@ class NjgxTaskRunner(SeleniumTaskRunner):
                 pass
 
             # 检测视频播放状态
-            from selenium.webdriver.support import expected_conditions as EC
-            # 等待元素存在
             try:
                 # # 1. 等待元素存在于DOM中
                 # play_button = WebDriverWait(self.driver, 10).until(

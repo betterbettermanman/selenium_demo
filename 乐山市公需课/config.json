@@ -4,8 +4,8 @@
     "username": "李霞LX",
     "password": "LX18383313866",
     "is_head": 1,
-    "requiredPeriod": 1,
-    "updated_at": "2026-07-06 19:00:52"
+    "requiredPeriod": 10,
+    "updated_at": "2026-07-09 12:03:34"
   },
   {
     "name": "511124199801301726",
@@ -19,6 +19,22 @@
     "name": "13108979560",
     "username": "13108979560",
     "password": "19970602hy.",
+    "is_head": 1,
+    "requiredPeriod": 1,
+    "updated_at": "2026-07-06 19:00:52"
+  },
+  {
+    "name": "511129198504150025",
+    "username": "511129198504150025",
+    "password": "ls1018@123",
+    "is_head": 1,
+    "requiredPeriod": 1,
+    "updated_at": "2026-07-06 19:00:52"
+  },
+  {
+    "name": "511129199201125628",
+    "username": "511129199201125628",
+    "password": "Hechuan123",
     "is_head": 1,
     "requiredPeriod": 1,
     "updated_at": "2026-07-06 19:00:52"
