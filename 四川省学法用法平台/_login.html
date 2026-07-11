@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="renderer" content="webkit" />
+    <meta name="baidu_union_verify" content="558e6b47733478ebda9443e82cf78cb2">
+    <meta name="tencent-site-verification" content="a35ad97881f8a7481bf32c043e566ac0"/>
+    <meta name="description" content="四川省国家工作人员学法用法平台"/>
+    <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+    <title>登录四川省国家工作人员学法用法平台</title>
+    <script>
+        if(!([].forEach) || !([].map) || !([].filter)){
+            document.write('<div style="text-align: center;background:#ffface;padding: 8px;border-bottom: 1px solid #ddd;color: #666;po">' +
+                    '<p style="font-size: 20px;">您的浏览器太旧了，可能无法使用部分功能，推荐使用以下浏览器的最新版本</p>'+
+                    '<table style="margin: 0 auto;font-size: 14px;" cellpadding="20"><tr>' +
+                    '<td><img width="32" src="/study/static/images/not_support/guge.png"><div><a href="#">谷歌浏览器</a></div></td>' +
+                    '<td><img width="32" src="/study/static/images/not_support/huohu.png"><div><a href="#">火狐浏览器</a></div></td>' +
+                    '<td><img width="32" src="/study/static/images/not_support/360.png"><div><a href="#">360极速浏览器</a></div></td>' +
+                    '<td><img width="32" src="/study/static/images/not_support/liebao.png"><div><a href="#">猎豹浏览器</a></div></td>' +
+                    '<td><img width="32" src="/study/static/images/not_support/qq.png"><div><a href="#">QQ浏览器</a></div></td>' +
+                    '<td><img width="32" src="/study/static/images/not_support/sougou.png"><div><a href="#">搜狗浏览器</a></div></td>' +
+                    '</tr></table>' +
+                    '</div>'
+            )
+        }
+    </script>
+    <link rel="shortcut icon" href="/study/static/images/favicon.ico?v1.2" type="image/x-icon" />
+    <link href="/study/static/css/bootstrap/bootstrap-5.3.0.min.css?v1.2" rel="stylesheet">
+    <link rel="stylesheet" href="/study/static/css/new_style.css?v1.2">
+    <script src="/study/static/js/jquery-3.7.1.min.js?v1.2"></script>
+    <script src="/study/static/js/md5.js?v1.2"></script>
+    <script src="/study/static/js/bootstrap/bootstrap-5.3.0.min.js?v1.2"></script>
+    <script>
+        window.console = window.console || (function () {
+                    var c = {}; c.log = c.warn = c.debug = c.info = c.error = c.time = c.dir = c.profile
+                            = c.clear = c.exception = c.trace = c.assert = function () { };
+                    return c;
+                })();
+    </script>
+    <style>
+        html *,
+        html *::after,
+        html *::before {
+            box-sizing: content-box !important;
+        }
+        html,body{
+            padding:0;
+            margin:0;
+            min-height:100%;
+            width:100%;
+        }
+        body {
+            background: url(/study/static/img/bg.jpg?v1.2)center center no-repeat;
+                        background-size:cover;
+        }
+        .wxImg {
+            position: absolute;
+            top:-7px;
+            left: 0;
+            width: 340px;
+            height: 300px;
+            background: #fef4eb;
+            display:none;
+        }
+        .wxImg img {
+            overflow: hidden;
+            display: inline-block;
+            height: 100%;
+            margin: 15px 0;
+        }
+        .tippass {
+            padding-bottom: 10px;
+            width: 252px;
+            text-align:left;
+            float: right;
+            font-size: 13px;
+        }
+        .red {
+            color:#f44336;
+        }
+        .blue {
+            color:#ff5723;
+        }
+        .renshu {
+            position: absolute;
+            bottom: 0px;
+            left: 0;
+            width: 100%;
+            height: auto;
+            color: #ce1802;
+            font-size: 13px;
+        }
+        .renshu span {
+            color: #ff0000;
+        }
+
+        .trans {
+            position: absolute;
+            margin: 2px;
+            right: 0;
+            width: 64px;
+            height: 64px;
+            background-image: url(/study/static/img/qrCode.png);
+            background-color: #fef4eb;
+            border-radius: 5px 20px 5px 5px;
+            cursor: pointer;
+        }
+        .imgApp {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(225deg,transparent 45px, #fef4eb 0);
+        }
+        input[type="password"]::-ms-reveal,
+        input::-ms-clear { /* 同时清除清除按钮 */
+            display: none !important;
+            visibility: hidden !important;
+        }
+        /* 输入框容器 */
+        .password-box {
+            position: relative;
+            width: 100%;
+        }
+        /* 眼睛图标 */
+        .eye-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            color: #666;
+        }
+        .eye-closed {
+            display: none;
+        }
+        /*#login_form_m {*/
+        /*    -webkit-filter: grayscale(100%);*/
+        /*    -moz-filter: grayscale(100%);*/
+        /*    -ms-filter: grayscale(100%);*/
+        /*    -o-filter: grayscale(100%);*/
+        /*    filter:progid:DXImageTransform.Microsoft.BasicImage(grayscale=1);*/
+        /*    _filter:none;*/
+        /*}*/
+        /*.modal-dialog{*/
+
+        /*    -webkit-filter: grayscale(100%);*/
+        /*    -moz-filter: grayscale(100%);*/
+        /*    -ms-filter: grayscale(100%);*/
+        /*    -o-filter: grayscale(100%);*/
+        /*    filter:progid:DXImageTransform.Microsoft.BasicImage(grayscale=1);*/
+        /*    _filter:none;*/
+        /*}*/
+        /*.loginBox{*/
+        /*    -webkit-filter: grayscale(100%);*/
+        /*    -moz-filter: grayscale(100%);*/
+        /*    -ms-filter: grayscale(100%);*/
+        /*    -o-filter: grayscale(100%);*/
+        /*    filter:progid:DXImageTransform.Microsoft.BasicImage(grayscale=1);*/
+        /*    _filter:none;*/
+        /*}*/
+    </style>
+    <script src="/study/static/js/hm-baidu.js?v1.2"></script>
+</head>
+<body>
+<div class="cent">
+    <div class="getcent">
+        <div class="header-icon"><img src="/study/static/img/12.png?v1.2"/></div>
+        <div class="loginBox" >
+            <div class="trans">
+                <div class="imgApp"></div>
+            </div>
+           
+            <div class="bgs">
+                <div>
+                    <div class="metRdiv"style="position: relative;">
+                        <div class="sign" >
+                            <div  class="learning"><span style="">登录到学法用法平台</span></div>
+                            <form id="loginForm" role="form" class="form-horizontal" onsubmit="return false;">
+                                <div  class="bic">
+                                    <span>账&nbsp;&nbsp;&nbsp;号&nbsp;:</span>
+                                    <input type="text" name="mobile" onkeyup="return ValidateNumber($(this),value)" placeholder="手机号" vd-name="手机号" vd-check='{"required":true,"digits":true}' />
+                                </div>
+                                <div  class="bic password-box">
+                                    <span>密&nbsp;&nbsp;&nbsp;码&nbsp;:</span>
+                                    <input type="password" name="password" id="password" onkeypress="javascript:if(event.keyCode == 32)event.returnValue = false;" placeholder="密码" vd-name="密码" vd-check='{"required":true,"range":[8,16]}'/>
+                                    <!-- 睁眼 SVG -->
+                                    <svg class="eye-btn eye-open" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                    </svg>
+                                    <!-- 闭眼 SVG -->
+                                    <svg class="eye-btn eye-closed" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.36 4.33-.97l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.42-.08.65 0 1.66 1.34 3 3 3 .23 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>
+                                    </svg>
+                                </div>
+                                <div  class="bic">
+                                    <span >验证码&nbsp;:</span>
+                                    <div>
+                                        <input type="text"  class="bicinput" name="captcha" maxlength="4" size="4" placeholder="验证码" vd-name="验证码" vd-check='{"required":true,"length":4}' />
+                                        <img class="captcha" alt='刷新验证码' src='/study/captcha' height="30px" width="75px"/>
+                                    </div>
+                                </div>
+                                <div class=" tip tippass"></div>
+                                <div class="bic">
+                                    <button type="submit" value="登 录" name="submit" class="button" >登&nbsp;&nbsp;&nbsp;&nbsp;录</button>
+                                </div>
+                            </form>
+                            <div  class="bic jump">
+                                <br>
+                            </div>
+                            <div class="wxImg">
+                                <a class="imageHide" style="padding: 10px;
+    display: block;
+    border: 1px solid #ccc;
+    border-radius: 50px;
+    line-height: 19px;
+    text-align: center;text-decoration: auto;
+    color: #be000a; background: #fff;
+    margin: 0 100px;">使用账号登录</a>
+                                <div style="width: 200px;height: 200px; background:#fef4eb; display: block;margin:0 auto;margin-top: 0px;cursor: pointer;" class="qrImage" id="qrImage">
+                                                                    </div>
+                                                            </div>
+                        </div>
+                        <div id="headcount" style="height: 200px;text-align: left;text-indent: 2em;display: none;padding-top: 120px;">
+                            <p>当前系统在线人数已达峰值。为缓解网络压力，确保考试顺畅，请您稍后登录系统，敬请谅解</p>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+
+        </div>
+    </div>
+</div>
+<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#myModal" id="modalBtn" style="display: none">
+    Launch demo modal
+</button>
+<!-- Modal -->
+<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" data-bs-backdrop="static" aria-hidden="false">
+    <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 630px">
+        <div class="modal-content">
+            <div class="modal-body">
+                <style>
+                    .modal-body h4 {
+                        font-weight: bold;
+                        font-size: 20px;
+                        text-align: center;
+                        color: black;
+                    }
+                    .modal-body li {
+                        color: black;
+                        list-style-type: inherit;
+                        margin: 15px 25px;
+                        text-indent: -22px;
+                    }
+                </style>
+                <h4>四川省国家工作人员学法用法平台 · 登录须知</h4>
+                <div style="font-size: 16px; color: #333; margin: 15px;">
+                    <li>学员首次登录请核对身份与单位信息，及时修改密码并做好保存。</li>
+                    <li>学员须依照<a href="/study/static/file/scxfCreditManagementMeasures.docx" target="_blank">《四川省国家工作人员学法用法学分管理办法》</a>获取学分。</li>
+                    <li>学法用法平台依照法律法规进行实名制管理并采取风险防范措施，请各位学员在使用平台过程中遵守相关法律法规，<strong>严禁通过非法手段登录、使用学法用法平台。</strong></li>
+                </div>
+                <p style="text-align: center;margin: 25px 0 5px;
+    font-size: 16px;
+    color: #f30;"><input type="checkbox" id="know" style="vertical-align:middle;width: 19px;height: 19px;margin: 0px 5px 0px 0px;float: none;"><label id="lab1" for="know" style="vertical-align:middle;margin-bottom: 0px;">以上信息我已知晓。</label></p>
+                <p style="text-align: center;color: red" id="tip"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" style="padding: 15px 30px; background: #ff5723; border: 0;
+    width: 100%;" class="btn btn-primary" id="yes">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    var headcount = 1382;
+    var token = null;
+    var intervalId;
+    var timeoutId;
+    var sessionId;
+
+    const pwdInput = document.getElementById('password');
+    const eyeOpen = document.querySelector('.eye-open');
+    const eyeClosed = document.querySelector('.eye-closed');
+
+    // 点击切换
+    function togglePassword() {
+        if (pwdInput.type === 'password') {
+            pwdInput.type = 'text';
+            eyeOpen.style.display = 'none';
+            eyeClosed.style.display = 'block';
+        } else {
+            pwdInput.type = 'password';
+            eyeClosed.style.display = 'none';
+            eyeOpen.style.display = 'block';
+        }
+    }
+
+    eyeOpen.addEventListener('click', togglePassword);
+    eyeClosed.addEventListener('click', togglePassword);
+
+    $(function(){
+        $('.trans').hide()
+        wxQrCode()
+        var date = new Date()
+        var year = date.getFullYear();
+        $(".footer").append("<p style=\"margin-bottom: 10px;\">主办单位： 省委依法治省办   省委组织部   省委宣传部   司法厅   人力资源社会保障厅   省国资委</p>\n" +
+                "            2019-"+year+" © 四川普法 <a href=\"http://beian.miit.gov.cn\" target=\"_blank\" rel=\"nofollow\" style=\"color: white\">粤ICP备19080270号-1</a>")
+        $('a.signa1').click(function(){
+            $('div.wxImg').show();
+        })
+        $("a.imageHide").click(function(){
+            // $('div.wxImg').hide();
+            clearInterval(intervalId)
+            clearTimeout(timeoutId)
+            $('div.wxImg').hide();
+            $(".trans").show()
+            $("#qrImage").empty();
+        })
+
+        $(".captcha").click(function(){
+            $(this).attr("src","/study/captcha?"+new Date().getTime())
+        });
+
+        if(headcount && headcount > 300000){
+            $(".sign").hide();
+            $("#headcount").show();
+        }
+
+        // 测试 bootstrap 模态框居中
+        // var modal = $('.modal');
+        // modal.on('shown.bs.modal', function () {
+        //     var that = $(this);
+        //     var modalDialog = that.find('.modal-dialog');
+        //     // 关键代码，如没将modal设置为 block，则 modala_dialog.height() 为零
+        //     that.css('display', 'block');
+        //     modalDialog.css({'margin-top': Math.max(0, ($(window).height() - modalDialog.height()) / 2) });
+        // })
+
+        $('#modalBtn').onclick = function () {
+            $('#myModal').modal('show')
+        }
+
+        $('#yes').click(function () {
+            console.log(yesOk())
+            if (yesOk()) {
+                $('#myModal').modal('hide')
+                Http.Login.$('#loginForm').start();return false;
+            } else {
+                $('#tip').text('*勾选后确定即可登录')
+                return
+            }
+        })
+
+        $('button[name=submit]').click(function () {
+            if (isNull($('input[name=mobile]').val())) {
+                $('.tip').text('手机号不能为空');
+                return;
+            }
+            if (isNull($('input[name=password]').val())) {
+                $('.tip').text('密码不能为空');
+                return;
+            }
+            if (isNull($('input[name=captcha]').val())) {
+                $('.tip').text('验证码不能为空');
+                return;
+            }
+            $('#modalBtn').click();
+        })
+
+        $(".trans").click(function () {
+            $(this).hide()
+            wxQrCode()
+        })
+
+        $("#qrImage").click(function () {
+            console.log("refresh")
+            clearInterval(intervalId);
+            clearTimeout(timeoutId)
+            $(this).empty();
+            wxQrCode()
+        })
+    })
+    function ValidateNumber(e, pnumber) {
+        if (!/^\d+$/.test(pnumber)) {
+            $(e).val(/^\d+/.exec($(e).val()));
+        }
+        return false;
+    }
+
+    const yesOk = function () {
+        if($('#know').prop('checked')) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function isNull(val){
+        return typeof val == "undefined" || typeof val == "null" || typeof val == "NaN" || val == "";
+    }
+
+    function wxQrCode() {
+        jQuery.get("/study/wxQrCode", function (data) {
+            sessionId = (data.substring(0, data.indexOf("token")))
+            Base64ToImage(data.substring(data.indexOf("token") + 5, data.length), function(img) {
+                document.getElementById('qrImage').appendChild(img);
+                const qrDescDiv = document.getElementById('qrDesc')
+                if (qrDescDiv) {
+                    qrDescDiv.textContent = "使用微信扫一扫登录";
+                } else {
+                    // 1. 创建 div 元素
+                    const qrDescDiv = document.createElement("div");
+                    qrDescDiv.id = "qrDesc";
+                    qrDescDiv.textContent = "使用微信扫一扫登录";
+                    const qrImage = document.getElementById("qrImage");
+                    qrImage.appendChild(qrDescDiv);
+                }
+                $('div.wxImg').show();
+                intervalId = setInterval("polling()", 5000)
+                timeoutId = setTimeout(clearIv, 1000 * 60 * 2)
+            })
+        })
+    }
+
+    function clearIv() {
+        console.log("clearIntervalId")
+        clearInterval(intervalId)
+    }
+
+    function Base64ToImage(base64img, callback) {
+        var img = new Image();
+        img.onload = function() {
+            callback(img);
+        };
+        img.src = base64img;
+        img.alt = "刷新二维码"
+    }
+
+    function polling() {
+        jQuery.get("/study/polling?sessionId="+sessionId, "", function(data) {
+            console.log(data)
+            if (data.includes("已扫码")) {
+                const qrDescDiv = document.getElementById('qrDesc')
+                if (qrDescDiv) {
+                    qrDescDiv.textContent = "扫码成功，请在手机上登录平台以绑定微信";
+                } else {
+                    // 1. 创建 div 元素
+                    const qrDescDiv = document.createElement("div");
+                    qrDescDiv.id = "qrDesc";
+                    qrDescDiv.textContent = "扫码成功，请在手机上登录平台以绑定微信";
+                    const qrImage = document.getElementById("qrImage");
+                    qrImage.appendChild(qrDescDiv);
+                }
+            }
+            if (data == "true") {
+                clearInterval(intervalId)
+                clearTimeout(timeoutId)
+                window.location.href = "/study/index"
+            }
+        })
+    }
+</script>
+<script type="text/javascript" src="/study/static/js/http/http.js?v1.2"></script>
+<script type="text/javascript" src="/study/static/js/http/http-login.js?v1.2"></script>
+</body>
+</html>
