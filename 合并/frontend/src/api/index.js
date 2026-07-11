@@ -1,10 +1,21 @@
 import axios from 'axios'
 import { message } from 'ant-design-vue'
 
+const RETRYABLE_METHODS = new Set(['get', 'head', 'options'])
+
 const request = axios.create({
   baseURL: '/api',
-  timeout: 15000,
+  timeout: 30000,
 })
+
+const isRetryableError = (error) => {
+  if (!error.config || error.config.skipRetry) return false
+  const method = (error.config.method || '').toLowerCase()
+  if (!RETRYABLE_METHODS.has(method)) return false
+  if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) return true
+  if (!error.response) return true
+  return false
+}
 
 request.interceptors.response.use(
   (response) => {
@@ -18,7 +29,14 @@ request.interceptors.response.use(
     }
     return res
   },
-  (error) => {
+  async (error) => {
+    const config = error.config
+    const retryCount = config?.__retryCount || 0
+    if (config && retryCount < 1 && isRetryableError(error)) {
+      config.__retryCount = retryCount + 1
+      return request(config)
+    }
+
     if (error.config?.skipGlobalError) {
       return Promise.reject(error)
     }

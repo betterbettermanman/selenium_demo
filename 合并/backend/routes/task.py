@@ -18,42 +18,68 @@ from services.task_runner import (
 )
 from services.task_runner import RunnerPhase
 from services.user_account_sync import sync_user_account_from_task
+from utils.perf_log import track_phase
 
 task_bp = Blueprint('task', __name__, url_prefix='/api/tasks')
 
 
-def _enrich_task_dict(task_dict):
-    website = Website.query.filter_by(code=task_dict.get('website_code')).first()
-    course = None
-    if task_dict.get('class_id') and task_dict.get('website_code'):
-        course = Course.query.filter_by(
-            class_id=task_dict['class_id'],
-            website_code=task_dict['website_code'],
-        ).first()
+def _apply_task_filters(query, keyword='', status=''):
+    if keyword:
+        kw = f'%{keyword}%'
+        query = query.filter(
+            db.or_(
+                Task.nick_name.like(kw),
+                Task.username.like(kw),
+                Task.organ_name.like(kw),
+                Task.website_code.like(kw),
+                Task.remark.like(kw),
+                Website.name.like(kw),
+                Course.name.like(kw),
+            )
+        )
+    if status:
+        query = query.filter(Task.status == status)
+    return query
+
+
+def _build_joined_task_query(keyword='', status=''):
+    query = (
+        db.session.query(Task, Website, Course)
+        .select_from(Task)
+        .outerjoin(Website, Task.website_code == Website.code)
+        .outerjoin(
+            Course,
+            db.and_(Task.class_id == Course.class_id, Task.website_code == Course.website_code),
+        )
+    )
+    return _apply_task_filters(query, keyword, status).order_by(Task.id.desc())
+
+
+def _compose_task_dict(task, website=None, course=None, include_runtime=True):
+    task_dict = task.to_dict()
     task_dict['website_id'] = website.id if website else None
     task_dict['website_name'] = website.name if website else ''
     task_dict['course_id'] = course.id if course else None
     task_dict['course_name'] = course.name if course else ''
-    task_dict['is_running'] = is_task_running(task_dict.get('id'))
-    runner = get_runner(task_dict.get('id'))
-    task_dict['waiting_sms'] = (
-        runner is not None and runner.phase == RunnerPhase.WAITING_SMS
-    )
     task_dict['enable_sms_code'] = website.enable_sms_code if website else '0'
+    if include_runtime:
+        task_dict['is_running'] = is_task_running(task.id)
+        runner = get_runner(task.id)
+        task_dict['waiting_sms'] = (
+            runner is not None and runner.phase == RunnerPhase.WAITING_SMS
+        )
     return task_dict
 
 
-def _enrich_task_dict_export(task_dict):
-    website = Website.query.filter_by(code=task_dict.get('website_code')).first()
+def _enrich_task_dict(task):
+    website = Website.query.filter_by(code=task.website_code).first()
     course = None
-    if task_dict.get('class_id') and task_dict.get('website_code'):
+    if task.class_id and task.website_code:
         course = Course.query.filter_by(
-            class_id=task_dict['class_id'],
-            website_code=task_dict['website_code'],
+            class_id=task.class_id,
+            website_code=task.website_code,
         ).first()
-    task_dict['website_name'] = website.name if website else ''
-    task_dict['course_name'] = course.name if course else ''
-    return task_dict
+    return _compose_task_dict(task, website, course)
 
 
 def _build_task_query(keyword='', status=''):
@@ -124,16 +150,24 @@ def list_tasks():
     keyword = request.args.get('keyword', '', type=str).strip()
     status = request.args.get('status', '', type=str).strip()
 
-    query = _build_task_query(keyword, status)
+    with track_phase('build_query'):
+        query = _build_joined_task_query(keyword, status)
 
-    pagination = query.paginate(
-        page=page, per_page=page_size, error_out=False
-    )
+    with track_phase('paginate', page=page, page_size=page_size):
+        pagination = query.paginate(
+            page=page, per_page=page_size, error_out=False
+        )
+
+    with track_phase('compose', items=len(pagination.items)):
+        task_list = [
+            _compose_task_dict(task, website, course)
+            for task, website, course in pagination.items
+        ]
 
     return {
         'code': 200,
         'data': {
-            'list': [_enrich_task_dict(item.to_dict()) for item in pagination.items],
+            'list': task_list,
             'total': pagination.total,
             'page': page,
             'page_size': page_size,
@@ -146,7 +180,7 @@ def list_tasks():
 def export_tasks():
     keyword = request.args.get('keyword', '', type=str).strip()
     status = request.args.get('status', '', type=str).strip()
-    tasks = _build_task_query(keyword, status).all()
+    tasks = _build_joined_task_query(keyword, status).all()
 
     headers = [
         'ID', '网站名称', '课程名称', '姓名', '单位名称', '账号', '密码',
@@ -157,8 +191,8 @@ def export_tasks():
     ws.title = '任务列表'
     ws.append(headers)
 
-    for item in tasks:
-        row = _enrich_task_dict_export(item.to_dict())
+    for task, website, course in tasks:
+        row = _compose_task_dict(task, website, course, include_runtime=False)
         ws.append([
             row.get('id', ''),
             row.get('website_name', ''),
@@ -195,7 +229,7 @@ def get_task(item_id):
     item = Task.query.get(item_id)
     if not item:
         return {'code': 404, 'message': '任务不存在'}, 404
-    return {'code': 200, 'data': _enrich_task_dict(item.to_dict()), 'message': 'success'}
+    return {'code': 200, 'data': _enrich_task_dict(item), 'message': 'success'}
 
 
 @task_bp.route('', methods=['POST'])
@@ -242,7 +276,7 @@ def create_task():
         organ_name=data.get('organ_name'),
     )
     db.session.commit()
-    return {'code': 200, 'data': _enrich_task_dict(item.to_dict()), 'message': '创建成功'}
+    return {'code': 200, 'data': _enrich_task_dict(item), 'message': '创建成功'}
 
 
 @task_bp.route('/<int:item_id>', methods=['PUT'])
@@ -307,7 +341,7 @@ def update_task(item_id):
         organ_name=item.organ_name,
     )
     db.session.commit()
-    return {'code': 200, 'data': _enrich_task_dict(item.to_dict()), 'message': '更新成功'}
+    return {'code': 200, 'data': _enrich_task_dict(item), 'message': '更新成功'}
 
 
 @task_bp.route('/<int:item_id>/start', methods=['POST'])
@@ -324,7 +358,7 @@ def start_task_api(item_id):
     return {
         'code': 200,
         'data': {
-            **_enrich_task_dict(item.to_dict()),
+            **_enrich_task_dict(item),
             'need_sms': result.get('need_sms', False),
         },
         'message': result.get('message', '任务已启动'),
@@ -349,7 +383,7 @@ def submit_sms_code_api(item_id):
 
     return {
         'code': 200,
-        'data': _enrich_task_dict(item.to_dict()),
+        'data': _enrich_task_dict(item),
         'message': msg,
     }
 
@@ -367,7 +401,7 @@ def stop_task_api(item_id):
 
     return {
         'code': 200,
-        'data': _enrich_task_dict(item.to_dict()),
+        'data': _enrich_task_dict(item),
         'message': msg,
     }
 
