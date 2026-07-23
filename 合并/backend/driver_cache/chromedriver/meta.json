@@ -1,7 +1,7 @@
 {
-  "chrome_version": "149.0.7827.201",
-  "driver_version": "149.0.7827.155",
-  "path": "D:\\develop\\workspace\\pycharm\\selenium_demo\\合并\\backend\\driver_cache\\chromedriver\\149.0.7827.155\\chromedriver.exe",
-  "download_url": "https://registry.npmmirror.com/-/binary/chrome-for-testing/149.0.7827.155/win64/chromedriver-win64.zip",
-  "updated_at": "2026-07-09 18:50:51"
+  "chrome_version": "150.0.7871.114",
+  "driver_version": "150.0.7871.49",
+  "path": "D:\\develop\\workspace\\pycharm\\selenium_demo\\合并\\backend\\driver_cache\\chromedriver\\150.0.7871.49\\chromedriver.exe",
+  "download_url": "https://registry.npmmirror.com/-/binary/chrome-for-testing/150.0.7871.49/win64/chromedriver-win64.zip",
+  "updated_at": "2026-07-12 11:48:38"
 }

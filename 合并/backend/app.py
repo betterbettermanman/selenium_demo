@@ -86,10 +86,21 @@ with app.app_context():
 
 
 if __name__ == '__main__':
+    import sys
+
     debug = os.getenv('FLASK_DEBUG', '1') == '1'
     port = int(os.getenv('PORT', '6002' if debug else '6001'))
+    # PyCharm/pydev 调试时禁用 reloader：子进程重连会因中文路径等触发 UnicodeDecodeError
+    under_debugger = (
+        os.environ.get('PYCHARM_HOSTED') == '1'
+        or 'pydevd' in sys.modules
+        or sys.gettrace() is not None
+    )
+    use_reloader = debug and not under_debugger
     if os.path.isdir(STATIC_DIR):
         logging.info('生产模式: http://0.0.0.0:%s', port)
     else:
         logging.info('开发模式 API: http://0.0.0.0:%s (请单独启动前端 Vite)', port)
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    if under_debugger:
+        logging.info('检测到调试器，已关闭 Flask reloader')
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=use_reloader)
