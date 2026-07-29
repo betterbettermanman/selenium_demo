@@ -603,12 +603,12 @@ CHROMEDRIVER_PATH = "chromedriver.exe"
 BASE_URL = config_json["base_url"]
 target_courses = config_json["target_courses"]
 
-user_data_dir = "user_data_dir"
+user_data_dir = "user_data_dir2"
 
 if __name__ == "__main__":
     check_login()
     # 初始化共享浏览器，获取主窗口句柄
-    driver, wait, wait_3, main_window_handle = init_shared_browser(head=True, user_data_dir2=user_data_dir,
+    driver, wait, wait_3, main_window_handle = init_shared_browser(head=False, user_data_dir2=user_data_dir,
                                                                    chromedriver_path=CHROMEDRIVER_PATH)
     checker = TeacherTrainingChecker(
         driver=driver,

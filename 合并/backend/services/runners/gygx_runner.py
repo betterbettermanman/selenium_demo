@@ -242,7 +242,6 @@ class GygxTaskRunner(SeleniumTaskRunner):
         except Exception:
             pass
 
-
     # ----------------------------------------------------------- play loop
     def _play_course_loop(self):
         while self.is_running and not self.is_complete and not self._stopped:
@@ -464,23 +463,16 @@ class GygxTaskRunner(SeleniumTaskRunner):
 
         self._ensure_on_list_window()
         self._dismiss_message_box()
-        for xpath in (
-                '//span[contains(@class,"get-code") and contains(normalize-space(),"查询")]',
-                '//div[contains(@class,"search-icon") and contains(@class,"cursor")]',
-                '//*[contains(@class,"cursor") and normalize-space()="查询"]',
-                '//button[contains(.,"查询")]',
-        ):
-            try:
-                els = self.driver.find_elements(By.XPATH, xpath)
-                for el in els:
-                    if el.is_displayed():
-                        el.click()
-                        self._log_info('已点击查询刷新进度')
-                        time.sleep(2)
-                        return
-            except Exception:
-                continue
-        self._log_warning('未找到查询按钮，尝试重新打开课包')
+
+        try:
+            element = self.driver.find_element(By.XPATH, "//span[@class='get-code' and text()='搜索']")
+            element.click()
+            self._log_info('已点击查询刷新进度')
+            time.sleep(2)
+            return
+        except Exception:
+            self._log_warning('未找到查询按钮，尝试重新打开课包')
+
         self._open_course_package()
 
     def _dismiss_message_box(self):

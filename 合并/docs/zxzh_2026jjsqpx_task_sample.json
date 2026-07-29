@@ -1,0 +1,26 @@
+{
+  "class_id": "https://basic.smartedu.cn/training/2026jjsqpx",
+  "courses": [
+    {
+      "title": "大力弘扬教育家精神",
+      "url": "https://basic.smartedu.cn/teacherTraining/courseDetail?courseId=79d28f6c-0b8a-443d-bdda-a78165c462f3&tag=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89&channelId=&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&breadcrumb=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89"
+    },
+    {
+      "title": "数字素养提升",
+      "url": "https://basic.smartedu.cn/teacherTraining/courseIndex?courseId=165d9433-5486-43e4-926e-3f33b92635e4&breadcrumb=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&tag=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89"
+    },
+    {
+      "title": "科学素养提升",
+      "url": "https://basic.smartedu.cn/teacherTraining/courseIndex?courseId=b2ec4202-c747-4ad2-a1b1-35a6c277c856&breadcrumb=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&tag=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89"
+    },
+    {
+      "title": "心理健康教育能力提升",
+      "url": "https://basic.smartedu.cn/teacherTraining/courseIndex?courseId=ca2a448a-5ff5-4183-92c2-6506f6696228&breadcrumb=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&tag=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89"
+    },
+    {
+      "title": "学科教学能力提升",
+      "url": "https://basic.smartedu.cn/teacherTraining/courseIndex?courseId=a09d7192-d7d6-4451-8828-a96d3a5e66ca&breadcrumb=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89&libraryId=bb042e69-9a11-49a1-af22-0c3fab2e92b9&tag=2026%E5%B9%B4%E2%80%9C%E6%9A%91%E6%9C%9F%E6%95%99%E5%B8%88%E7%A0%94%E4%BF%AE%E2%80%9D%E4%B8%93%E9%A2%98%EF%BC%88%E5%9F%BA%E7%A1%80%E6%95%99%E8%82%B2%EF%BC%89"
+    }
+  ],
+  "note": "创建 ZXZH 任务时：class_id 填专题 URL；courses 填本文件 courses 数组。完成条件为专题页学时满 10。"
+}
