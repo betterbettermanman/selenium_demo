@@ -6,8 +6,9 @@
 登录：https://auth.smartedu.cn/uias/login
 验证码：腾讯防水墙滑块（iframe #tcaptcha_iframe_dy / drag_ele.html）
 
-流程：滑块登录 → 打开专题页（task.class_id）→ 按 task.courses 播课
+流程：检测已有登录态 →（必要时）滑块登录 → 打开专题页（task.class_id）→ 按 task.courses 播课
 完成条件：专题页累计学时达到 CREDIT_TARGET（默认 10）。
+单课优化：专题页「已学习 > 认定」即跳过换下一门（实际学时通常略高于认定）；「已认定 >= 认定」亦跳过。
 """
 from __future__ import annotations
 
@@ -26,6 +27,13 @@ SLIDER_MAX_RETRY = 8
 CREDIT_TARGET = 10
 VIDEO_POLL_SECONDS = 30
 VIDEO_MAX_WAIT_SECONDS = 3 * 60 * 60  # 单节最长等待 3 小时
+# 专题页单课进度：已学习 2.15 / 已认定 2.00 / 认定 2 学时
+COURSE_LEARNED_PATTERN = re.compile(r'已学习\s*([\d.]+)')
+COURSE_CREDIT_PATTERN = re.compile(
+    r'已认定\s*([\d.]+)\s*/\s*认定\s*([\d.]+)\s*学时'
+)
+COURSE_CREDIT_SCAN_CHARS = 800
+COURSE_CREDIT_EPS = 1e-6
 
 
 @register_runner('ZXZH')
@@ -47,7 +55,10 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         try:
             self._prepare_config()
             self._init_browser(window_size=(1920, 1080))
-            self._ensure_logged_in(max_rounds=2)
+            if self._check_already_logged_in():
+                self._log_info('系统已登录，跳过登录，直接进入专题学习')
+            else:
+                self._ensure_logged_in(max_rounds=2)
             self._play_training_loop()
             self._sync_task_status()
         except Exception:
@@ -124,6 +135,55 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         self._log_info('浏览器已启动 headless=%s', self.task.is_head == '1')
 
     # ------------------------------------------------------------------ login
+    def _check_already_logged_in(self) -> bool:
+        """先打开专题页/首页，用头像判断是否已登录（对齐寒暑假期教师研修 check_login）。"""
+        probe_url = self.training_url or ZXZH_HOME_URL
+        self._log_info('登录前检测会话，打开 %s', probe_url)
+        try:
+            self.driver.get(probe_url)
+            time.sleep(5)
+        except Exception:
+            self._log_warning('打开探测页失败，将走登录流程')
+            return False
+
+        # 被踢到登录页 → 未登录
+        url = (self.driver.current_url or '').lower()
+        if 'auth.smartedu.cn' in url and 'login' in url:
+            self._log_info('探测页跳转到登录，判定未登录')
+            return False
+
+        if self._has_user_avatar(timeout=8):
+            self._log_info('检测到用户头像，判定已登录')
+            return True
+
+        if self._is_logged_in():
+            self._log_info('检测到登录 cookie/storage，判定已登录')
+            return True
+
+        self._log_info('未检测到登录态，需要重新登录')
+        return False
+
+    def _has_user_avatar(self, timeout: float = 8) -> bool:
+        """参考实现：div.index-module_avatar* 可点击即视为已登录。"""
+        try:
+            from selenium.webdriver.common.by import By
+
+            xpath = ".//div[starts-with(@class,'index-module_avatar')]"
+            if timeout <= 0:
+                els = self.driver.find_elements(By.XPATH, xpath)
+                return any(el.is_displayed() for el in els)
+
+            from selenium.common import TimeoutException
+            from selenium.webdriver.support import expected_conditions as EC
+            from selenium.webdriver.support.wait import WebDriverWait
+
+            WebDriverWait(self.driver, timeout).until(
+                EC.element_to_be_clickable((By.XPATH, xpath))
+            )
+            return True
+        except Exception:
+            return False
+
     def _is_logged_in(self) -> bool:
         try:
             url = (self.driver.current_url or '').lower()
@@ -134,8 +194,10 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         if 'auth.smartedu.cn' in url and '/uias/login' in url:
             return False
 
-        # 登录成功常跳到 www.smartedu.cn / basic.smartedu.cn
+        # 业务站：优先用头像（与参考脚本一致，瞬时检测避免拖慢循环）
         if 'smartedu.cn' in url and 'auth.smartedu.cn' not in url:
+            if self._has_user_avatar(timeout=0):
+                return True
             for key in (
                 'ND_UC_AUTH', 'UC_TOKEN', 'token', 'access_token', 'TGC',
                 'CASTGC', 'SESSION', 'JSESSIONID',
@@ -178,7 +240,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         self.driver.get(ZXZH_LOGIN_URL)
         time.sleep(2)
 
-        if self._is_logged_in():
+        if self._is_logged_in() or self._has_user_avatar(timeout=3):
             self._log_info('检测到已有登录态，跳过表单')
             return
 
@@ -270,9 +332,14 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                 return
 
             played = False
+            all_credit_done = True
             for course in self.course_list:
                 if self._stopped or not self.is_running or self.is_complete:
                     break
+                if self._is_course_credit_done(course['title']):
+                    self._log_info('课程认定已满，跳过: %s', course['title'])
+                    continue
+                all_credit_done = False
                 self._log_info('尝试播放课程: %s', course['title'])
                 if self._play_one_unfinished_section(course):
                     played = True
@@ -280,6 +347,15 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                     self._open_training_home()
                     hours = self._read_training_hours()
                     self._log_info('回专题页刷新学时 current=%s target=%s', hours[0], hours[1])
+                    progress = self._read_course_progress(course['title'])
+                    if progress:
+                        self._log_info(
+                            '回专题页课程进度 %s: 已学习=%s 已认定=%s / 认定=%s',
+                            course['title'],
+                            progress['learned'],
+                            progress['accredited'],
+                            progress['required'],
+                        )
                     if self._hours_reached(hours):
                         self._mark_course_complete()
                         return
@@ -287,7 +363,12 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
 
             if not played:
                 empty_rounds += 1
-                self._log_warning('本轮未找到可播小节 empty_rounds=%s', empty_rounds)
+                if all_credit_done:
+                    self._log_warning(
+                        '配置课程认定均已满但仍未达总学时目标 empty_rounds=%s', empty_rounds
+                    )
+                else:
+                    self._log_warning('本轮未找到可播小节 empty_rounds=%s', empty_rounds)
                 if empty_rounds >= 2:
                     raise RuntimeError(
                         f'学时未满（目标 {CREDIT_TARGET}）且 courses 已无未完成小节，请补充 courses 或人工检查'
@@ -363,6 +444,75 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         reached = current >= CREDIT_TARGET or (target > 0 and current >= target)
         self._log_info('学时检测 current=%s target=%s credit_target=%s reached=%s', current, target, CREDIT_TARGET, reached)
         return reached
+
+    def _training_page_text(self) -> str:
+        try:
+            from selenium.webdriver.common.by import By
+
+            return self.driver.find_element(By.TAG_NAME, 'body').text or ''
+        except Exception:
+            return self.driver.page_source or ''
+
+    def _read_course_progress(self, title: str) -> dict[str, float] | None:
+        """从专题页解析某门课进度：已学习 / 已认定 / 认定。匹配失败返回 None。"""
+        title = (title or '').strip()
+        if not title:
+            return None
+        body = self._training_page_text()
+        idx = body.find(title)
+        if idx < 0:
+            self._log_warning('专题页未找到课程标题，无法读学时进度: %s', title)
+            return None
+        window = body[idx:idx + COURSE_CREDIT_SCAN_CHARS]
+        credit_m = COURSE_CREDIT_PATTERN.search(window)
+        if not credit_m:
+            self._log_warning('课程卡片未解析到认定学时: %s', title)
+            return None
+        try:
+            accredited = float(credit_m.group(1))
+            required = float(credit_m.group(2))
+        except (TypeError, ValueError):
+            return None
+
+        learned = accredited
+        learned_m = COURSE_LEARNED_PATTERN.search(window)
+        if learned_m:
+            try:
+                learned = float(learned_m.group(1))
+            except (TypeError, ValueError):
+                pass
+
+        return {
+            'learned': learned,
+            'accredited': accredited,
+            'required': required,
+        }
+
+    def _read_course_credit(self, title: str) -> tuple[float, float] | None:
+        """兼容旧调用：返回 (已认定, 认定)。"""
+        progress = self._read_course_progress(title)
+        if not progress:
+            return None
+        return progress['accredited'], progress['required']
+
+    def _is_course_credit_done(self, title: str) -> bool:
+        """实际学时已超过认定，或已认定已满 → 可换下一章。"""
+        progress = self._read_course_progress(title)
+        if not progress:
+            return False
+        learned = progress['learned']
+        accredited = progress['accredited']
+        required = progress['required']
+        # 实际学时通常略高于认定：已学习 > 认定 即可换课
+        by_learned = learned > required + COURSE_CREDIT_EPS
+        by_accredited = accredited + COURSE_CREDIT_EPS >= required
+        done = by_learned or by_accredited
+        self._log_info(
+            '课程进度检测 %s: 已学习=%s 已认定=%s / 认定=%s '
+            'by_learned=%s by_accredited=%s done=%s',
+            title, learned, accredited, required, by_learned, by_accredited, done,
+        )
+        return done
 
     def _switch_to_list_window(self):
         if self.list_window and self.list_window in self.driver.window_handles:
