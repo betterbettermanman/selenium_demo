@@ -191,10 +191,10 @@ class LsgxTaskRunner(SeleniumTaskRunner):
     def _check_course_success(self):
         from selenium.webdriver.common.by import By
 
-        sleep_time = 10
-        self._log_info('开始监听播放进度 user=%s', self.task.username)
+        sleep_time = 60
+        self._log_info('开始监听播放进度 user=%s interval=%ss', self.task.username, sleep_time)
 
-        while not self.is_complete and self.is_running:
+        while not self.is_complete and self.is_running and not self._stopped:
             if self.check_page_error():
                 self._log_warning('页面异常，重新打开课程页')
                 self._open_course_home()
@@ -208,11 +208,16 @@ class LsgxTaskRunner(SeleniumTaskRunner):
                     return {
                         paused: video.paused,
                         ended: video.ended,
-                        currentTime: video.currentTime,
-                        duration: video.duration
+                        currentTime: video.currentTime || 0,
+                        duration: video.duration || 0
                     };
                 """, video)
+            except Exception as exc:
+                self._log_warning('获取视频进度失败: %s', exc)
+                time.sleep(sleep_time)
+                continue
 
+            try:
                 progress = 0.0
                 if info['duration'] and info['duration'] > 0:
                     progress = (info['currentTime'] / info['duration']) * 100
@@ -222,17 +227,54 @@ class LsgxTaskRunner(SeleniumTaskRunner):
                     self._log_info('当前视频已播完，查找下一节')
                     self._open_course_home()
                     time.sleep(5)
-                elif info['paused'] and info['currentTime'] > 0:
-                    self._log_info('视频暂停，尝试继续播放')
-                    video.click()
-                    time.sleep(5)
-                elif info['currentTime'] == 0:
-                    self._log_info('视频未开始，点击播放')
-                    video.click()
+                elif info['paused'] or info['currentTime'] == 0:
+                    reason = '暂停' if info['paused'] and info['currentTime'] > 0 else '未开始'
+                    self._log_info('视频%s，尝试继续播放', reason)
+                    self._resume_video(video)
                     time.sleep(5)
             except Exception as exc:
-                self._log_warning('获取视频进度失败: %s', exc)
+                self._log_warning('处理播放状态失败: %s', exc)
 
             time.sleep(sleep_time)
 
         self._log_info('播放监控结束 user=%s', self.task.username)
+
+    def _resume_video(self, video):
+        """避免原生 click 被标题/遮罩拦截，优先 JS play / 点击播放按钮。"""
+        from selenium.webdriver.common.by import By
+
+        # 1) 直接调用 HTMLVideoElement.play()
+        try:
+            self.driver.execute_script("""
+                var video = arguments[0];
+                try { video.muted = false; } catch (e) {}
+                var p = video.play();
+                if (p && typeof p.catch === 'function') {
+                    p.catch(function () {});
+                }
+            """, video)
+            return
+        except Exception as exc:
+            self._log_warning('JS play() 失败: %s', exc)
+
+        # 2) Video.js 大播放按钮
+        for selector in (
+            '.vjs-big-play-button',
+            'button.vjs-play-control',
+            '.vjs-play-control',
+        ):
+            try:
+                btns = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                for btn in btns:
+                    if not btn.is_displayed():
+                        continue
+                    self.driver.execute_script('arguments[0].click();', btn)
+                    return
+            except Exception:
+                continue
+
+        # 3) 最后兜底：JS 点击 video（仍可能被策略拦截，但比原生 click 稳）
+        try:
+            self.driver.execute_script('arguments[0].click();', video)
+        except Exception as exc:
+            self._log_warning('兜底点击 video 失败: %s', exc)
