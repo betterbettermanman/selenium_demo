@@ -66,5 +66,6 @@ CREATE TABLE IF NOT EXISTS `user_account` (
   `password` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密码',
   `create_time` datetime DEFAULT NULL COMMENT '创建日期',
   `update_time` datetime DEFAULT NULL COMMENT '更新日期',
-  PRIMARY KEY (`id`) USING BTREE
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `idx_user_account_website_code` (`website_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='用户账号';

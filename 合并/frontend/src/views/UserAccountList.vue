@@ -141,24 +141,43 @@ const pagination = reactive({
   showTotal: (total) => `共 ${total} 条`,
 })
 
+let listAbortController = null
+let listRequestSeq = 0
+
 const fetchWebsites = async () => {
   const res = await websiteApi.list({ page: 1, page_size: 1000 })
   websiteOptions.value = res.data.list || []
 }
 
 const fetchList = async () => {
+  if (listAbortController) {
+    listAbortController.abort()
+  }
+  const controller = new AbortController()
+  listAbortController = controller
+  const seq = ++listRequestSeq
+
   loading.value = true
   try {
-    const res = await userAccountApi.list({
-      page: pagination.current,
-      page_size: pagination.pageSize,
-      keyword: keyword.value,
-      website_id: websiteFilter.value || undefined,
-    })
+    const res = await userAccountApi.list(
+      {
+        page: pagination.current,
+        page_size: pagination.pageSize,
+        keyword: keyword.value,
+        website_id: websiteFilter.value || undefined,
+      },
+      { signal: controller.signal },
+    )
+    if (seq !== listRequestSeq) return
     dataList.value = res.data.list
     pagination.total = res.data.total
+  } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return
+    throw error
   } finally {
-    loading.value = false
+    if (seq === listRequestSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -168,8 +187,13 @@ const handleSearch = () => {
 }
 
 const handleTableChange = (pag) => {
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
+  const nextPage = pag.current
+  const nextSize = pag.pageSize
+  if (nextPage === pagination.current && nextSize === pagination.pageSize) {
+    return
+  }
+  pagination.current = nextPage
+  pagination.pageSize = nextSize
   fetchList()
 }
 

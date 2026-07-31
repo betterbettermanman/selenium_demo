@@ -30,6 +30,10 @@ request.interceptors.response.use(
     return res
   },
   async (error) => {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return Promise.reject(error)
+    }
+
     const config = error.config
     const retryCount = config?.__retryCount || 0
     if (config && retryCount < 1 && isRetryableError(error)) {
@@ -78,7 +82,7 @@ export const taskApi = {
 }
 
 export const userAccountApi = {
-  list: (params) => request.get('/user-accounts', { params }),
+  list: (params, config = {}) => request.get('/user-accounts', { params, ...config }),
   create: (data) => request.post('/user-accounts', data),
   update: (id, data) => request.put(`/user-accounts/${id}`, data),
   delete: (id) => request.delete(`/user-accounts/${id}`),

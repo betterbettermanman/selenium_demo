@@ -3,16 +3,44 @@ from flask import Blueprint, request
 from models import db
 from models.user_account import UserAccount
 from models.website import Website
+from utils.perf_log import track_phase
 
 user_account_bp = Blueprint('user_account', __name__, url_prefix='/api/user-accounts')
 
 
-def _enrich_user_account_dict(item_dict):
-    website = Website.query.filter_by(code=item_dict.get('website_code')).first()
+def _compose_user_account_dict(item, website=None):
+    item_dict = item.to_dict()
     item_dict['website_id'] = website.id if website else None
     item_dict['website_name'] = website.name if website else ''
     item_dict['website_url'] = website.url if website else ''
     return item_dict
+
+
+def _enrich_user_account_dict(item):
+    website = Website.query.filter_by(code=item.website_code).first()
+    return _compose_user_account_dict(item, website)
+
+
+def _build_joined_user_account_query(keyword='', website_id=None):
+    query = (
+        db.session.query(UserAccount, Website)
+        .select_from(UserAccount)
+        .outerjoin(Website, UserAccount.website_code == Website.code)
+    )
+    if website_id:
+        query = query.filter(Website.id == website_id)
+    if keyword:
+        kw = f'%{keyword}%'
+        query = query.filter(
+            db.or_(
+                UserAccount.nick_name.like(kw),
+                UserAccount.organ_name.like(kw),
+                UserAccount.username.like(kw),
+                UserAccount.website_code.like(kw),
+                Website.name.like(kw),
+            )
+        )
+    return query.order_by(UserAccount.id.desc())
 
 
 def _resolve_website(website_id):
@@ -31,32 +59,24 @@ def list_user_accounts():
     keyword = request.args.get('keyword', '', type=str).strip()
     website_id = request.args.get('website_id', type=int)
 
-    query = UserAccount.query
-    if website_id:
-        website = Website.query.get(website_id)
-        if website:
-            query = query.filter(UserAccount.website_code == website.code)
-    if keyword:
-        kw = f'%{keyword}%'
-        query = query.outerjoin(Website, UserAccount.website_code == Website.code)
-        query = query.filter(
-            db.or_(
-                UserAccount.nick_name.like(kw),
-                UserAccount.organ_name.like(kw),
-                UserAccount.username.like(kw),
-                UserAccount.website_code.like(kw),
-                Website.name.like(kw),
-            )
-        ).distinct()
+    with track_phase('build_query'):
+        query = _build_joined_user_account_query(keyword, website_id)
 
-    pagination = query.order_by(UserAccount.id.desc()).paginate(
-        page=page, per_page=page_size, error_out=False
-    )
+    with track_phase('paginate', page=page, page_size=page_size):
+        pagination = query.paginate(
+            page=page, per_page=page_size, error_out=False
+        )
+
+    with track_phase('compose', items=len(pagination.items)):
+        account_list = [
+            _compose_user_account_dict(item, website)
+            for item, website in pagination.items
+        ]
 
     return {
         'code': 200,
         'data': {
-            'list': [_enrich_user_account_dict(item.to_dict()) for item in pagination.items],
+            'list': account_list,
             'total': pagination.total,
             'page': page,
             'page_size': page_size,
@@ -70,7 +90,7 @@ def get_user_account(item_id):
     item = UserAccount.query.get(item_id)
     if not item:
         return {'code': 404, 'message': '用户不存在'}, 404
-    return {'code': 200, 'data': _enrich_user_account_dict(item.to_dict()), 'message': 'success'}
+    return {'code': 200, 'data': _enrich_user_account_dict(item), 'message': 'success'}
 
 
 @user_account_bp.route('', methods=['POST'])
@@ -99,7 +119,7 @@ def create_user_account():
     )
     db.session.add(item)
     db.session.commit()
-    return {'code': 200, 'data': _enrich_user_account_dict(item.to_dict()), 'message': '创建成功'}
+    return {'code': 200, 'data': _enrich_user_account_dict(item), 'message': '创建成功'}
 
 
 @user_account_bp.route('/<int:item_id>', methods=['PUT'])
@@ -132,7 +152,7 @@ def update_user_account(item_id):
         item.organ_name = (data.get('organ_name') or '').strip() or None
 
     db.session.commit()
-    return {'code': 200, 'data': _enrich_user_account_dict(item.to_dict()), 'message': '更新成功'}
+    return {'code': 200, 'data': _enrich_user_account_dict(item), 'message': '更新成功'}
 
 
 @user_account_bp.route('/<int:item_id>', methods=['DELETE'])
