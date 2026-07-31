@@ -37,14 +37,14 @@ def open_website_browser(website) -> tuple[bool, str]:
         if driver:
             try:
                 _ = driver.window_handles
-                driver.get(url)
-                return True, f'浏览器已打开，已跳转: {url}'
+                msg = _navigate(driver, url)
+                return True, msg
             except Exception:
                 _browsers.pop(website_id, None)
 
     try:
         driver = _create_headed_driver(website)
-        driver.get(url)
+        msg = _navigate(driver, url)
     except Exception as exc:
         logger.exception('打开网站浏览器失败 website_id=%s', website_id)
         return False, f'打开浏览器失败: {exc}'
@@ -58,7 +58,7 @@ def open_website_browser(website) -> tuple[bool, str]:
         daemon=True,
         name=f'website-browser-{website_id}',
     ).start()
-    return True, f'已打开有头浏览器: {url}'
+    return True, msg
 
 
 def close_website_browser(website_id: int) -> tuple[bool, str]:
@@ -91,12 +91,29 @@ def _create_headed_driver(website):
     options.add_argument('--disable-gpu')
     options.add_argument('--start-maximized')
     options.add_argument('--no-sandbox')
+    options.page_load_strategy = 'eager'
 
+    t0 = time.perf_counter()
     service = Service(get_chromedriver_path())
     driver = webdriver.Chrome(service=service, options=options)
+    driver.set_page_load_timeout(15)
     driver.maximize_window()
-    driver.implicitly_wait(10)
+    driver.implicitly_wait(3)
+    logger.info('网站预览浏览器启动耗时 %.1fms website_id=%s', (time.perf_counter() - t0) * 1000, website.id)
     return driver
+
+
+def _navigate(driver, url: str) -> str:
+    from selenium.common.exceptions import TimeoutException
+
+    t0 = time.perf_counter()
+    try:
+        driver.get(url)
+        logger.info('网站预览跳转完成 %.1fms url=%s', (time.perf_counter() - t0) * 1000, url)
+        return f'已打开有头浏览器: {url}'
+    except TimeoutException:
+        logger.warning('网站预览页面加载超时（已打开窗口）url=%s', url)
+        return f'浏览器已打开，页面仍在加载: {url}'
 
 
 def _watch_browser(website_id: int, driver):

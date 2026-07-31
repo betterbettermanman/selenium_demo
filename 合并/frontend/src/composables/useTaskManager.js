@@ -16,6 +16,7 @@ export function useTaskManager() {
   const courseOptions = ref([])
   const startingTaskId = ref(null)
   const stoppingTaskId = ref(null)
+  const openingBrowserId = ref(null)
   const smsModalVisible = ref(false)
   const smsSubmitting = ref(false)
   const smsResending = ref(false)
@@ -241,6 +242,22 @@ export function useTaskManager() {
     }
   }
 
+  const handleOpenBrowser = async (record) => {
+    if (record.is_running) {
+      message.warning('任务正在执行中，请先关闭任务')
+      return
+    }
+    openingBrowserId.value = record.id
+    const hideLoading = message.loading('正在打开浏览器...', 0)
+    try {
+      const res = await taskApi.openBrowser(record.id)
+      message.success(res.message || '浏览器已打开')
+    } finally {
+      hideLoading()
+      openingBrowserId.value = null
+    }
+  }
+
   const handleDelete = async (id) => {
     await taskApi.delete(id)
     message.success('删除成功')
@@ -360,6 +377,7 @@ export function useTaskManager() {
     courseOptions,
     startingTaskId,
     stoppingTaskId,
+    openingBrowserId,
     smsModalVisible,
     smsSubmitting,
     smsResending,
@@ -378,6 +396,7 @@ export function useTaskManager() {
     openModal,
     handleSubmit,
     handleStop,
+    handleOpenBrowser,
     handleDelete,
     handleStart,
     handleSubmitSms,

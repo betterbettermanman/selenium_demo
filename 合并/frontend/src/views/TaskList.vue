@@ -82,6 +82,15 @@
             >
               启动
             </a-button>
+            <a-button
+              type="link"
+              size="small"
+              :loading="openingBrowserId === record.id"
+              :disabled="record.is_running"
+              @click="handleOpenBrowser(record)"
+            >
+              打开浏览器
+            </a-button>
             <a-popconfirm
               title="确定关闭该任务吗？将关闭对应浏览器并停止执行。"
               :disabled="!record.is_running"
@@ -238,7 +247,7 @@ const columns = [
   { title: '状态', key: 'status', width: 170 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
-  { title: '操作', key: 'action', width: 260, fixed: 'right' },
+  { title: '操作', key: 'action', width: 340, fixed: 'right' },
 ]
 
 const loading = ref(false)
@@ -254,6 +263,7 @@ const websiteOptions = ref([])
 const courseOptions = ref([])
 const startingTaskId = ref(null)
 const stoppingTaskId = ref(null)
+const openingBrowserId = ref(null)
 const smsModalVisible = ref(false)
 const smsSubmitting = ref(false)
 const smsResending = ref(false)
@@ -475,6 +485,22 @@ const handleStop = async (id) => {
     fetchList()
   } finally {
     stoppingTaskId.value = null
+  }
+}
+
+const handleOpenBrowser = async (record) => {
+  if (record.is_running) {
+    message.warning('任务正在执行中，请先关闭任务')
+    return
+  }
+  openingBrowserId.value = record.id
+  const hideLoading = message.loading('正在打开浏览器...', 0)
+  try {
+    const res = await taskApi.openBrowser(record.id)
+    message.success(res.message || '浏览器已打开')
+  } finally {
+    hideLoading()
+    openingBrowserId.value = null
   }
 }
 

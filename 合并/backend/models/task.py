@@ -23,8 +23,8 @@ class Task(db.Model):
     create_time = db.Column(db.DateTime, default=datetime.now, comment='创建日期')
     update_time = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, comment='更新日期')
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_courses=True):
+        data = {
             'id': self.id,
             'nick_name': self.nick_name,
             'organ_name': self.organ_name,
@@ -37,8 +37,13 @@ class Task(db.Model):
             'no_play_videos': self.no_play_videos,
             'remark': self.remark,
             'class_id': self.class_id,
-            'courses': self.courses,
             'website_code': self.website_code,
             'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S') if self.create_time else None,
             'update_time': self.update_time.strftime('%Y-%m-%d %H:%M:%S') if self.update_time else None,
         }
+        # 列表场景可跳过 courses，避免触发 deferred 懒加载
+        if include_courses:
+            data['courses'] = self.courses
+        else:
+            data['courses'] = None
+        return data

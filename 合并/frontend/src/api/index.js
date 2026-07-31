@@ -78,6 +78,7 @@ export const taskApi = {
   submitSmsCode: (id, code) => request.post(`/tasks/${id}/sms-code`, { code }, { timeout: 60000 }),
   resendSmsCode: (id) => request.post(`/tasks/${id}/resend-sms`, null, { timeout: 30000 }),
   stop: (id) => request.post(`/tasks/${id}/stop`, null, { timeout: 30000 }),
+  openBrowser: (id) => request.post(`/tasks/${id}/open-browser`, null, { timeout: 120000 }),
   export: (params) => request.get('/tasks/export', { params, responseType: 'blob' }),
 }
 

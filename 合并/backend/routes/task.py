@@ -17,6 +17,7 @@ from services.task_runner import (
     submit_sms_code,
 )
 from services.task_runner import RunnerPhase
+from services.task_browser import close_task_browser, open_task_browser
 from services.user_account_sync import sync_user_account_from_task
 from utils.perf_log import track_phase
 
@@ -42,7 +43,7 @@ def _apply_task_filters(query, keyword='', status=''):
     return query
 
 
-def _build_joined_task_query(keyword='', status=''):
+def _build_joined_task_query(keyword='', status='', defer_courses=False):
     query = (
         db.session.query(Task, Website, Course)
         .select_from(Task)
@@ -52,11 +53,19 @@ def _build_joined_task_query(keyword='', status=''):
             db.and_(Task.class_id == Course.class_id, Task.website_code == Course.website_code),
         )
     )
+    if defer_courses:
+        # 列表不需要课表 JSON，减少远程库传输与反序列化
+        query = query.options(
+            db.defer(Task.courses),
+            db.defer(Course.courses),
+        )
     return _apply_task_filters(query, keyword, status).order_by(Task.id.desc())
 
 
-def _compose_task_dict(task, website=None, course=None, include_runtime=True):
-    task_dict = task.to_dict()
+def _compose_task_dict(
+    task, website=None, course=None, include_runtime=True, include_courses=True
+):
+    task_dict = task.to_dict(include_courses=include_courses)
     task_dict['website_id'] = website.id if website else None
     task_dict['website_name'] = website.name if website else ''
     task_dict['course_id'] = course.id if course else None
@@ -151,7 +160,7 @@ def list_tasks():
     status = request.args.get('status', '', type=str).strip()
 
     with track_phase('build_query'):
-        query = _build_joined_task_query(keyword, status)
+        query = _build_joined_task_query(keyword, status, defer_courses=True)
 
     with track_phase('paginate', page=page, page_size=page_size):
         pagination = query.paginate(
@@ -160,7 +169,7 @@ def list_tasks():
 
     with track_phase('compose', items=len(pagination.items)):
         task_list = [
-            _compose_task_dict(task, website, course)
+            _compose_task_dict(task, website, course, include_courses=False)
             for task, website, course in pagination.items
         ]
 
@@ -180,7 +189,7 @@ def list_tasks():
 def export_tasks():
     keyword = request.args.get('keyword', '', type=str).strip()
     status = request.args.get('status', '', type=str).strip()
-    tasks = _build_joined_task_query(keyword, status).all()
+    tasks = _build_joined_task_query(keyword, status, defer_courses=True).all()
 
     headers = [
         'ID', '网站名称', '课程名称', '姓名', '单位名称', '账号', '密码',
@@ -192,7 +201,9 @@ def export_tasks():
     ws.append(headers)
 
     for task, website, course in tasks:
-        row = _compose_task_dict(task, website, course, include_runtime=False)
+        row = _compose_task_dict(
+            task, website, course, include_runtime=False, include_courses=False
+        )
         ws.append([
             row.get('id', ''),
             row.get('website_name', ''),
@@ -420,12 +431,34 @@ def resend_sms_code_api(item_id):
     return {'code': 200, 'message': msg}
 
 
+@task_bp.route('/<int:item_id>/open-browser', methods=['POST'])
+def open_task_browser_api(item_id):
+    item = Task.query.get(item_id)
+    if not item:
+        return {'code': 404, 'message': '任务不存在'}, 404
+
+    website = Website.query.filter_by(code=item.website_code).first() if item.website_code else None
+    if not website:
+        return {'code': 400, 'message': '任务未关联网站或网站不存在'}, 400
+
+    ok, msg = open_task_browser(item, website)
+    if not ok:
+        return {'code': 400, 'message': msg}, 400
+
+    return {
+        'code': 200,
+        'data': _enrich_task_dict(item),
+        'message': msg,
+    }
+
+
 @task_bp.route('/<int:item_id>', methods=['DELETE'])
 def delete_task(item_id):
     item = Task.query.get(item_id)
     if not item:
         return {'code': 404, 'message': '任务不存在'}, 404
 
+    close_task_browser(item_id)
     db.session.delete(item)
     db.session.commit()
     return {'code': 200, 'message': '删除成功'}

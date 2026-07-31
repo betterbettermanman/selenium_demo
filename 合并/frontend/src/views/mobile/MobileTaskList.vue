@@ -110,6 +110,15 @@
             <a-button
               size="small"
               block
+              :loading="openingBrowserId === record.id"
+              :disabled="record.is_running"
+              @click="handleOpenBrowser(record)"
+            >
+              打开浏览器
+            </a-button>
+            <a-button
+              size="small"
+              block
               :loading="stoppingTaskId === record.id"
               :disabled="!record.is_running"
               @click="confirmStop(record.id)"
@@ -298,6 +307,7 @@ const {
   courseOptions,
   startingTaskId,
   stoppingTaskId,
+  openingBrowserId,
   smsModalVisible,
   smsSubmitting,
   smsResending,
@@ -309,6 +319,7 @@ const {
   openModal,
   handleSubmit,
   handleStop,
+  handleOpenBrowser,
   handleDelete,
   handleStart,
   handleSubmitSms,
