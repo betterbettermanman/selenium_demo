@@ -372,8 +372,12 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                         self._mark_course_complete()
                         return
                     break
+                if self._stopped or not self.is_running:
+                    break
 
             if not played:
+                if self._stopped or not self.is_running:
+                    break
                 empty_rounds += 1
                 if all_credit_done:
                     self._log_warning(
@@ -591,31 +595,65 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         )
         return done
 
+    def _session_alive(self) -> bool:
+        """浏览器会话是否仍可用（手动停止会 quit driver）。"""
+        if self._stopped or not self.is_running:
+            return False
+        if not self.driver:
+            return False
+        try:
+            _ = self.driver.window_handles
+            return True
+        except Exception:
+            return False
+
     def _switch_to_list_window(self):
-        if self.list_window and self.list_window in self.driver.window_handles:
-            self.driver.switch_to.window(self.list_window)
+        if not self._session_alive():
             return
-        if self.driver.window_handles:
-            self.driver.switch_to.window(self.driver.window_handles[0])
-            self.list_window = self.driver.current_window_handle
+        try:
+            handles = self.driver.window_handles
+            if self.list_window and self.list_window in handles:
+                self.driver.switch_to.window(self.list_window)
+                return
+            if handles:
+                self.driver.switch_to.window(handles[0])
+                self.list_window = self.driver.current_window_handle
+        except Exception:
+            self._log_warning('切换专题页窗口失败（会话可能已关闭）')
 
     def _close_play_window(self):
+        if not self.driver:
+            self.play_window = None
+            return
         try:
-            if self.play_window and self.play_window in self.driver.window_handles:
+            if not self._session_alive():
+                return
+            handles = self.driver.window_handles
+            if self.play_window and self.play_window in handles:
                 self.driver.switch_to.window(self.play_window)
                 self.driver.close()
         except Exception:
-            self._log_warning('关闭播放页失败')
+            if not self._stopped:
+                self._log_warning('关闭播放页失败')
         finally:
             self.play_window = None
-            self._switch_to_list_window()
+            try:
+                self._switch_to_list_window()
+            except Exception:
+                pass
 
     def _play_one_unfinished_section(self, course: dict) -> bool:
         """打开一门课，播放一节未完成视频；成功播完一节返回 True。"""
+        if not self._session_alive():
+            return False
         self._switch_to_list_window()
+        if not self._session_alive():
+            return False
         before = set(self.driver.window_handles)
         self.driver.execute_script('window.open(arguments[0]);', course['url'])
         time.sleep(2)
+        if not self._session_alive():
+            return False
         new_handles = [h for h in self.driver.window_handles if h not in before]
         if not new_handles:
             self._log_warning('未能打开课程新标签: %s', course['title'])
@@ -626,6 +664,8 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         time.sleep(5)
 
         try:
+            if not self._session_alive():
+                return False
             self._expand_course_catalog()
             clicked = self._click_first_unfinished_resource()
             if not clicked:
@@ -636,7 +676,10 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             self._start_video_playback()
             done = self._wait_video_finished()
             if not done:
-                self._log_warning('等待「再学一遍」超时/中断: %s', course['title'])
+                if self._stopped:
+                    self._log_info('任务已停止，结束本节: %s', course['title'])
+                else:
+                    self._log_warning('等待「再学一遍」超时/中断: %s', course['title'])
                 self._close_play_window()
                 return False
 
@@ -644,6 +687,10 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             self._close_play_window()
             return True
         except Exception:
+            if self._stopped or not self.driver:
+                self._log_info('任务已停止或浏览器已关闭，忽略播放异常: %s', course['title'])
+                self.play_window = None
+                return False
             self._log_exception('播放课程异常: %s', course['title'])
             self._close_play_window()
             return False
