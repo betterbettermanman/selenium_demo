@@ -51,6 +51,13 @@ class BaseTaskRunner(ABC):
         self._app = None
         self._stopped = False
 
+    @property
+    def log_user_label(self) -> str:
+        """日志用：姓名|账号；姓名为空显示 -。"""
+        name = (getattr(self.task, 'nick_name', None) or '').strip() or '-'
+        account = (getattr(self.task, 'username', None) or '').strip() or '-'
+        return f'{name}|{account}'
+
     def bind_app(self, app):
         self._app = app
 
@@ -97,9 +104,17 @@ class BaseTaskRunner(ABC):
         if self.driver:
             try:
                 self.driver.quit()
-                logger.info('任务 %s 浏览器已关闭', getattr(self.task, 'id', '?'))
+                logger.info(
+                    '任务 %s [%s] 浏览器已关闭',
+                    getattr(self.task, 'id', '?'),
+                    self.log_user_label,
+                )
             except Exception:
-                logger.exception('任务 %s 关闭浏览器失败', getattr(self.task, 'id', '?'))
+                logger.exception(
+                    '任务 %s [%s] 关闭浏览器失败',
+                    getattr(self.task, 'id', '?'),
+                    self.log_user_label,
+                )
             finally:
                 self.driver = None
 
@@ -151,22 +166,23 @@ def _remove_runner(task_id):
 def _start_main_thread(task_id, runner, app):
     def _target():
         with app.app_context():
+            user_label = runner.log_user_label
             try:
                 runner._set_phase(RunnerPhase.RUNNING)
-                logger.info('任务 %s 开始执行主流程', task_id)
+                logger.info('任务 %s [%s] 开始执行主流程', task_id, user_label)
                 runner.run_main()
                 runner._set_phase(RunnerPhase.DONE)
-                logger.info('任务 %s 主流程执行完成', task_id)
+                logger.info('任务 %s [%s] 主流程执行完成', task_id, user_label)
             except Exception:
                 runner._set_phase(RunnerPhase.FAILED)
-                logger.exception('任务 %s 执行失败', task_id)
+                logger.exception('任务 %s [%s] 执行失败', task_id, user_label)
             finally:
                 _remove_runner(task_id)
                 if not runner._stopped:
                     try:
                         runner._cleanup()
                     except Exception:
-                        logger.exception('任务 %s 清理失败', task_id)
+                        logger.exception('任务 %s [%s] 清理失败', task_id, user_label)
 
     thread = threading.Thread(target=_target, daemon=True, name=f'task-{task_id}')
     with _lock:
@@ -206,7 +222,7 @@ def start_task(task_id, app):
             with app.app_context():
                 login_result = runner.prepare_login()
         except Exception as exc:
-            logger.exception('任务 %s 登录准备失败', task_id)
+            logger.exception('任务 %s [%s] 登录准备失败', task_id, runner.log_user_label)
             _remove_runner(task_id)
             try:
                 runner._cleanup()
@@ -248,7 +264,7 @@ def submit_sms_code(task_id, code, app):
         with app.app_context():
             ok, msg = runner.submit_sms_code(code)
     except Exception as exc:
-        logger.exception('任务 %s 提交验证码失败', task_id)
+        logger.exception('任务 %s [%s] 提交验证码失败', task_id, runner.log_user_label)
         return False, f'验证码提交失败: {exc}'
 
     if not ok:
@@ -265,11 +281,11 @@ def stop_task(task_id, app):
     if not runner or not is_task_running(task_id):
         return False, '任务未在运行'
 
-    logger.info('用户手动停止任务 %s', task_id)
+    logger.info('用户手动停止任务 %s [%s]', task_id, runner.log_user_label)
     try:
         runner.request_stop()
     except Exception:
-        logger.exception('停止任务 %s 时关闭浏览器失败', task_id)
+        logger.exception('停止任务 %s [%s] 时关闭浏览器失败', task_id, runner.log_user_label)
 
     _remove_runner(task_id)
 

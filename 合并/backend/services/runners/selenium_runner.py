@@ -45,16 +45,16 @@ class SeleniumTaskRunner(BaseTaskRunner):
         return self.website.code or 'RUNNER'
 
     def _log_info(self, msg: str, *args):
-        logger.info('[%s] ' + msg, self.log_tag, *args)
+        logger.info('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
 
     def _log_warning(self, msg: str, *args):
-        logger.warning('[%s] ' + msg, self.log_tag, *args)
+        logger.warning('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
 
     def _log_error(self, msg: str, *args):
-        logger.error('[%s] ' + msg, self.log_tag, *args)
+        logger.error('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
 
     def _log_exception(self, msg: str, *args):
-        logger.exception('[%s] ' + msg, self.log_tag, *args)
+        logger.exception('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
 
     def _browser_user_data_dir(self) -> str:
         return os.path.join(
