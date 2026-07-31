@@ -34,6 +34,18 @@ COURSE_CREDIT_PATTERN = re.compile(
 )
 COURSE_CREDIT_SCAN_CHARS = 800
 COURSE_CREDIT_EPS = 1e-6
+# 专题页「总进度」：已认定 / 要求认定（class 带 hash，用 contains 匹配）
+TOTAL_PROGRESS_BLOCK_XPATH = (
+    "//*[contains(@class,'topprocess') and contains(.,'要求认定')]"
+)
+TOTAL_ACCREDITED_PATTERN = re.compile(
+    r'已认定\s*/\s*要求认定\s*([\d.]+)\s*/\s*([\d.]+)',
+    re.S,
+)
+TOTAL_ACCREDITED_LOOSE_PATTERN = re.compile(
+    r'要求认定\s*([\d.]+)\s*/\s*([\d.]+)',
+    re.S,
+)
 
 
 @register_runner('ZXZH')
@@ -394,50 +406,115 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         self.list_window = self.driver.current_window_handle
 
     def _read_training_hours(self) -> tuple[float, float]:
-        """从专题页解析 (当前学时, 目标学时)。解析失败返回 (0, CREDIT_TARGET)。"""
+        """从专题页解析 (当前已认定学时, 要求认定学时)。
+
+        页面结构（总进度）：
+          已学习 2.80 学时
+          已认定 / 要求认定  2.00 / 10 学时
+        完成条件应对齐「已认定 / 要求认定」，不能用单课卡片的「已认定/认定」。
+        """
+        for attempt in range(3):
+            hours = self._read_training_hours_from_dom()
+            if hours is not None:
+                return hours
+            hours = self._read_training_hours_from_text()
+            if hours is not None:
+                return hours
+            if attempt < 2:
+                time.sleep(1.5)
+
+        self._log_warning('未能解析总进度学时，默认 0/%s', CREDIT_TARGET)
+        return 0.0, float(CREDIT_TARGET)
+
+    def _read_training_hours_from_dom(self) -> tuple[float, float] | None:
+        """优先用总进度 DOM（class 含 topprocess + 文案含要求认定）。"""
         try:
             from selenium.webdriver.common.by import By
 
-            body = self.driver.find_element(By.TAG_NAME, 'body').text or ''
+            blocks = self.driver.find_elements(By.XPATH, TOTAL_PROGRESS_BLOCK_XPATH)
         except Exception:
-            body = self.driver.page_source or ''
+            return None
+        if not blocks:
+            return None
 
-        patterns = [
+        # 取文本最长的一块，避免点到过小的子节点
+        block = max(blocks, key=lambda el: len((el.text or '').strip()))
+        text = (block.text or '').strip()
+        if not text:
+            return None
+
+        parsed = self._parse_total_accredited_text(text)
+        if parsed is not None:
+            self._log_info(
+                '总进度 DOM 解析 accredited=%s required=%s text=%s',
+                parsed[0], parsed[1], re.sub(r'\s+', ' ', text)[:120],
+            )
+        return parsed
+
+    def _read_training_hours_from_text(self) -> tuple[float, float] | None:
+        """文本兜底：只认「要求认定」，避免误匹配单课「已认定/认定」。"""
+        body = self._training_page_text()
+        if not body:
+            return None
+
+        # 先截取「总进度」附近，缩小误匹配范围
+        window = body
+        idx = body.find('总进度')
+        if idx >= 0:
+            window = body[idx:idx + 400]
+        elif '要求认定' in body:
+            idx = body.find('要求认定')
+            window = body[max(0, idx - 40):idx + 120]
+
+        parsed = self._parse_total_accredited_text(window)
+        if parsed is not None:
+            self._log_info(
+                '总进度文本解析 accredited=%s required=%s',
+                parsed[0], parsed[1],
+            )
+            return parsed
+
+        # 兼容旧文案：已获学时 2 / 10
+        legacy = re.search(
             r'已获(?:得)?学时\s*([\d.]+)\s*/\s*([\d.]+)',
-            r'已学\s*([\d.]+)\s*/\s*([\d.]+)\s*学时',
-            r'学时[：:\s]*([\d.]+)\s*/\s*([\d.]+)',
-            r'([\d.]+)\s*/\s*([\d.]+)\s*学时',
-            r'累计学时[：:\s]*([\d.]+)',
-        ]
-        for pat in patterns:
-            m = re.search(pat, body)
+            body,
+        )
+        if legacy:
+            try:
+                return float(legacy.group(1)), float(legacy.group(2))
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    @staticmethod
+    def _parse_total_accredited_text(text: str) -> tuple[float, float] | None:
+        if not text or '要求认定' not in text:
+            return None
+        for pat in (TOTAL_ACCREDITED_PATTERN, TOTAL_ACCREDITED_LOOSE_PATTERN):
+            m = pat.search(text)
             if not m:
                 continue
             try:
                 current = float(m.group(1))
-                target = float(m.group(2)) if m.lastindex and m.lastindex >= 2 else float(CREDIT_TARGET)
+                target = float(m.group(2))
+                if target <= 0:
+                    continue
                 return current, target
             except (TypeError, ValueError):
                 continue
 
-        # 兜底：在带「学时」的短文本块里找两个数字
-        for line in body.splitlines():
-            if '学时' not in line:
-                continue
-            nums = re.findall(r'\d+\.\d+|\d+', line)
+        # DOM text 常被拆成多行：已认定 / 要求认定 \n 2.00 \n / \n 10 \n 学时
+        if '要求认定' in text:
+            nums = re.findall(r'\d+\.\d+|\d+', text[text.find('要求认定'):])
             if len(nums) >= 2:
                 try:
-                    return float(nums[0]), float(nums[1])
+                    current = float(nums[0])
+                    target = float(nums[1])
+                    if target > 0:
+                        return current, target
                 except ValueError:
-                    continue
-            if len(nums) == 1:
-                try:
-                    return float(nums[0]), float(CREDIT_TARGET)
-                except ValueError:
-                    continue
-
-        self._log_warning('未能解析学时，默认 0/%s', CREDIT_TARGET)
-        return 0.0, float(CREDIT_TARGET)
+                    pass
+        return None
 
     def _hours_reached(self, hours: tuple[float, float] | None = None) -> bool:
         current, target = hours if hours is not None else self._read_training_hours()
