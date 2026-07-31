@@ -4,15 +4,43 @@ from models import db
 from models.course import Course
 from models.website import Website
 from utils.json_validate import validate_json_object_or_array
+from utils.perf_log import track_phase
 
 course_bp = Blueprint('course', __name__, url_prefix='/api/courses')
 
 
-def _enrich_course_dict(course_dict):
-    website = Website.query.filter_by(code=course_dict.get('website_code')).first()
+def _compose_course_dict(item, website=None):
+    course_dict = item.to_dict()
     course_dict['website_name'] = website.name if website else ''
     course_dict['website_id'] = website.id if website else None
     return course_dict
+
+
+def _enrich_course_dict(item):
+    website = Website.query.filter_by(code=item.website_code).first()
+    return _compose_course_dict(item, website)
+
+
+def _build_joined_course_query(keyword='', website_id=None):
+    query = (
+        db.session.query(Course, Website)
+        .select_from(Course)
+        .outerjoin(Website, Course.website_code == Website.code)
+    )
+    if website_id:
+        query = query.filter(Website.id == website_id)
+    if keyword:
+        kw = f'%{keyword}%'
+        query = query.filter(
+            db.or_(
+                Course.name.like(kw),
+                Course.class_id.like(kw),
+                Course.website_code.like(kw),
+                Course.remark.like(kw),
+                Website.name.like(kw),
+            )
+        )
+    return query.order_by(Course.id.desc())
 
 
 def _validate_course_payload(data):
@@ -53,7 +81,6 @@ def list_courses():
     keyword = request.args.get('keyword', '', type=str).strip()
     website_id = request.args.get('website_id', type=int)
 
-    query = Course.query
     if website_id:
         website = Website.query.get(website_id)
         if not website:
@@ -64,25 +91,25 @@ def list_courses():
                 'data': {'list': [], 'total': 0, 'page': page, 'page_size': page_size},
                 'message': 'success',
             }
-        query = query.filter(Course.website_code == website.code)
-    if keyword:
-        query = query.filter(
-            db.or_(
-                Course.name.like(f'%{keyword}%'),
-                Course.class_id.like(f'%{keyword}%'),
-                Course.website_code.like(f'%{keyword}%'),
-                Course.remark.like(f'%{keyword}%'),
-            )
+
+    with track_phase('build_query'):
+        query = _build_joined_course_query(keyword, website_id)
+
+    with track_phase('paginate', page=page, page_size=page_size):
+        pagination = query.paginate(
+            page=page, per_page=page_size, error_out=False
         )
 
-    pagination = query.order_by(Course.id.desc()).paginate(
-        page=page, per_page=page_size, error_out=False
-    )
+    with track_phase('compose', items=len(pagination.items)):
+        course_list = [
+            _compose_course_dict(item, website)
+            for item, website in pagination.items
+        ]
 
     return {
         'code': 200,
         'data': {
-            'list': [_enrich_course_dict(item.to_dict()) for item in pagination.items],
+            'list': course_list,
             'total': pagination.total,
             'page': page,
             'page_size': page_size,
@@ -96,7 +123,7 @@ def get_course(item_id):
     item = Course.query.get(item_id)
     if not item:
         return {'code': 404, 'message': '课程不存在'}, 404
-    return {'code': 200, 'data': _enrich_course_dict(item.to_dict()), 'message': 'success'}
+    return {'code': 200, 'data': _enrich_course_dict(item), 'message': 'success'}
 
 
 @course_bp.route('', methods=['POST'])
@@ -122,7 +149,7 @@ def create_course():
     )
     db.session.add(item)
     db.session.commit()
-    return {'code': 200, 'data': _enrich_course_dict(item.to_dict()), 'message': '创建成功'}
+    return {'code': 200, 'data': _enrich_course_dict(item), 'message': '创建成功'}
 
 
 @course_bp.route('/<int:item_id>', methods=['PUT'])
@@ -158,7 +185,7 @@ def update_course(item_id):
         item.remark = data['remark']
 
     db.session.commit()
-    return {'code': 200, 'data': _enrich_course_dict(item.to_dict()), 'message': '更新成功'}
+    return {'code': 200, 'data': _enrich_course_dict(item), 'message': '更新成功'}
 
 
 @course_bp.route('/<int:item_id>', methods=['DELETE'])

@@ -62,7 +62,7 @@ export const websiteApi = {
 }
 
 export const courseApi = {
-  list: (params) => request.get('/courses', { params }),
+  list: (params, config = {}) => request.get('/courses', { params, ...config }),
   create: (data) => request.post('/courses', data),
   update: (id, data) => request.put(`/courses/${id}`, data),
   delete: (id) => request.delete(`/courses/${id}`),

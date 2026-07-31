@@ -254,18 +254,37 @@ const fetchWebsites = async () => {
   websiteOptions.value = (res.data.list || []).filter((item) => item.code)
 }
 
+let listAbortController = null
+let listRequestSeq = 0
+
 const fetchList = async () => {
+  if (listAbortController) {
+    listAbortController.abort()
+  }
+  const controller = new AbortController()
+  listAbortController = controller
+  const seq = ++listRequestSeq
+
   loading.value = true
   try {
-    const res = await courseApi.list({
-      page: pagination.current,
-      page_size: pagination.pageSize,
-      keyword: keyword.value,
-    })
+    const res = await courseApi.list(
+      {
+        page: pagination.current,
+        page_size: pagination.pageSize,
+        keyword: keyword.value,
+      },
+      { signal: controller.signal },
+    )
+    if (seq !== listRequestSeq) return
     dataList.value = res.data.list
     pagination.total = res.data.total
+  } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return
+    throw error
   } finally {
-    loading.value = false
+    if (seq === listRequestSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -275,8 +294,13 @@ const handleSearch = () => {
 }
 
 const handleTableChange = (pag) => {
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
+  const nextPage = pag.current
+  const nextSize = pag.pageSize
+  if (nextPage === pagination.current && nextSize === pagination.pageSize) {
+    return
+  }
+  pagination.current = nextPage
+  pagination.pageSize = nextSize
   fetchList()
 }
 
