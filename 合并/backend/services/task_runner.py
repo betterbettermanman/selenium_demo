@@ -93,12 +93,36 @@ class BaseTaskRunner(ABC):
         self.phase = phase
 
     def request_stop(self):
-        """用户手动停止：终止循环并关闭浏览器。"""
+        """用户手动停止：立刻标记停止，浏览器在后台关闭，避免接口被 quit 拖死。"""
         self._stopped = True
         self._set_phase(RunnerPhase.DONE)
         if hasattr(self, 'is_running'):
             self.is_running = False
-        self._cleanup()
+        driver = self.driver
+        self.driver = None
+        if not driver:
+            return
+        threading.Thread(
+            target=self._quit_driver_async,
+            args=(driver,),
+            daemon=True,
+            name=f'stop-quit-{getattr(self.task, "id", "?")}',
+        ).start()
+
+    def _quit_driver_async(self, driver):
+        try:
+            driver.quit()
+            logger.info(
+                '任务 %s [%s] 浏览器已关闭',
+                getattr(self.task, 'id', '?'),
+                self.log_user_label,
+            )
+        except Exception:
+            logger.exception(
+                '任务 %s [%s] 关闭浏览器失败',
+                getattr(self.task, 'id', '?'),
+                self.log_user_label,
+            )
 
     def _cleanup(self):
         if self.driver:

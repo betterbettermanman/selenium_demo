@@ -237,6 +237,13 @@ export function useTaskManager() {
         smsTaskId.value = null
       }
       fetchList()
+    } catch (error) {
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        message.warning('关闭请求超时，请刷新列表确认任务状态')
+        fetchList()
+      } else {
+        message.error(error.response?.data?.message || error.message || '关闭失败')
+      }
     } finally {
       stoppingTaskId.value = null
     }
