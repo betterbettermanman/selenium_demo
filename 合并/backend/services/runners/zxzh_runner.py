@@ -776,40 +776,6 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         except TimeoutException:
             self._log_warning('未找到控制条')
 
-        self._set_playback_rate_2x()
-
-    def _set_playback_rate_2x(self):
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.support.wait import WebDriverWait
-
-        try:
-            # 参考脚本：连续点击 Playback Rate 切到 2x
-            rate_btn = WebDriverWait(self.driver, 5).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@title='Playback Rate']"))
-            )
-            for _ in range(3):
-                rate_btn.click()
-                time.sleep(0.2)
-            self._log_info('已尝试设置 2 倍速')
-            return
-        except Exception:
-            pass
-
-        # 兜底：JS 直接设 playbackRate
-        try:
-            ok = self.driver.execute_script(
-                """
-                const v = document.querySelector('video');
-                if (v) { v.playbackRate = 2; v.play(); return true; }
-                return false;
-                """
-            )
-            if ok:
-                self._log_info('已通过 JS 设置 video.playbackRate=2')
-        except Exception:
-            self._log_warning('设置倍速失败')
-
     def _wait_video_finished(self) -> bool:
         """轮询等待「再学一遍」出现。"""
         from selenium.webdriver.common.by import By
