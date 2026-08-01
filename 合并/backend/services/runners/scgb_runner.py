@@ -28,7 +28,10 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         self.nick_name = ''
         self.organ_name = ''
         self.current_course_id = ''
+        self.current_course_class_id = ''
         self.is_must = True
+        self._last_watch_times = None
+        self._watch_times_stale_rounds = 0
         self.api_headers = {
             'User-Agent': 'Mozilla/5.0',
             'Accept': '*/*',
@@ -181,12 +184,8 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             raise
 
     def _open_course_and_play(self):
-        """参考 scgb.py open_home：获取当前课程并打开播放页。"""
+        """直接打开下一门未完成课程并播放，不经过个人中心。"""
         self._sync_api_headers()
-        self._log_info('打开个人中心检查学习进度')
-        self.driver.get('https://web.scgb.gov.cn/#/personal')
-        time.sleep(3)
-
         courses = self._parse_course_items(self.task.courses)
         if courses:
             course = self._get_current_course(courses)
@@ -194,12 +193,13 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                 self._log_info('自定义课程已全部学完')
                 self.is_complete = True
                 return
+            self._log_info('打开下一门自定义课程 id=%s', course.get('id'))
             self._open_custom_course(course)
         else:
             if not self.task.class_id:
                 self._log_warning('未配置 class_id 且无课表，无法自动播放')
                 return
-            self._log_info('目标班级 class_id=%s', self.task.class_id)
+            self._log_info('目标班级 class_id=%s，直接进入课程列表续播', self.task.class_id)
             if not self._check_study_time():
                 return
             label = '必修' if self.is_must else '选修'
@@ -213,7 +213,8 @@ class ScgbTaskRunner(SeleniumTaskRunner):
 
         while not self.is_complete and self.is_running:
             try:
-                if self.check_page_error():
+                # SPA 源码常误含裸 "404"/"502"，基类 check_page_error 易误判并跳过切课逻辑
+                if self._scgb_page_error():
                     self._log_warning('页面异常，重新打开课程')
                     self._open_course_and_play()
                     time.sleep(10)
@@ -228,23 +229,45 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                     continue
                 null_course_rounds = 0
 
+                # watchTimes 连续两轮不变 → 进度停滞，主动换课（对齐原版 sleep_time_num）
+                if self._watch_times_stale_rounds >= 1:
+                    self._log_warning(
+                        '课程 %s 进度停滞，重新打开下一课',
+                        self.current_course_id,
+                    )
+                    self._reset_progress_tracker()
+                    self.current_course_id = ''
+                    self.current_course_class_id = ''
+                    self._open_course_and_play()
+                    time.sleep(10)
+                    continue
+
                 detail = self._fetch_course_detail(self.current_course_id)
                 if not detail:
+                    self._sync_api_headers()
                     sleep_time = 15
                 elif detail['totalPeriod'] <= detail['watchTimes']:
-                    self._log_info('课程 %s 已观看完成', self.current_course_id)
+                    self._log_info('课程 %s 已观看完成，立即续播下一门', self.current_course_id)
                     self._mark_custom_course_done(self.current_course_id)
+                    self._reset_progress_tracker()
+                    self.current_course_id = ''
+                    self.current_course_class_id = ''
                     if self._has_more_study_work():
-                        self.current_course_id = ''
                         self._open_course_and_play()
-                        sleep_time = 40
+                        sleep_time = 20
                     else:
                         self._log_info('全部课程已学完')
                         self.is_complete = True
                         break
                 else:
-                    remain = int(detail['totalPeriod']) - int(detail['watchTimes'])
+                    watched = int(detail['watchTimes'])
+                    remain = int(detail['totalPeriod']) - watched
                     sleep_time = max(30, min(remain, 1200))
+                    if self._last_watch_times == watched:
+                        self._watch_times_stale_rounds += 1
+                    else:
+                        self._last_watch_times = watched
+                        self._watch_times_stale_rounds = 0
                     self._log_info(
                         '课程 %s 播放中 total=%s watched=%s 下次检测间隔=%ss',
                         self.current_course_id,
@@ -252,7 +275,9 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                         detail['watchTimes'],
                         sleep_time,
                     )
-                    self._click_video_play_button()
+                    if self._ensure_video_playing():
+                        # 播放器已结束但接口尚未记满，缩短等待以便尽快切课
+                        sleep_time = min(sleep_time, 30)
             except Exception as exc:
                 self._log_warning('进度检测异常: %s', exc)
                 sleep_time = 20
@@ -273,8 +298,6 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             self._log_warning('课表条目缺少 id，跳过: %s', course)
             return
 
-        self.driver.get(SCGB_HOME_URL)
-        time.sleep(2)
         class_id = course.get('classId') or self.task.class_id
         if class_id:
             course_url = (
@@ -283,13 +306,15 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             )
         else:
             course_url = f'https://web.scgb.gov.cn/#/course?id={course_id}&className='
-        self._log_info('打开课程页面: %s', course_url)
+        self._log_info('直接打开课程播放页: %s', course_url)
         self.driver.get(course_url)
         time.sleep(2)
         self._close_course_modal2()
         self._click_video_play_button()
         self.current_course_id = course_id
-        self._log_info('当前课程ID: %s', self.current_course_id)
+        self.current_course_class_id = str(class_id or '')
+        self._reset_progress_tracker()
+        self._log_info('当前课程ID: %s classId=%s', self.current_course_id, self.current_course_class_id)
 
     def _open_class_course_detail(self, label: str):
         from selenium.common import TimeoutException
@@ -377,6 +402,8 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                         self.driver.close()
                 self.driver.switch_to.window(new_handle)
                 self.current_course_id = course_id or ''
+                self.current_course_class_id = str(self.task.class_id or '')
+                self._reset_progress_tracker()
                 self._log_info('当前课程ID: %s', self.current_course_id)
                 self._close_course_modal2()
                 self._click_video_play_button()
@@ -419,17 +446,75 @@ class ScgbTaskRunner(SeleniumTaskRunner):
 
     def _fetch_course_detail(self, course_id: str):
         url = f'{SCGB_API_BASE}/course/app/getCourseDetailByUserId?'
-        payload = {'courseId': course_id, 'classId': self.task.class_id or ''}
+        class_id = self.current_course_class_id or self.task.class_id or ''
+        payload = {'courseId': course_id, 'classId': class_id}
         try:
             response = requests.post(url, headers=self.api_headers, json=payload, timeout=10)
             if response.status_code == 401:
-                self._log_warning('登录已过期')
+                self._log_warning('登录已过期，尝试刷新 token')
+                self._sync_api_headers()
                 return None
             response.raise_for_status()
             return response.json().get('result')
         except Exception:
             self._log_exception('查询课程详情失败 course_id=%s', course_id)
             return None
+
+    def _reset_progress_tracker(self):
+        self._last_watch_times = None
+        self._watch_times_stale_rounds = 0
+
+    def _scgb_page_error(self) -> bool:
+        """仅匹配明确的网关/超时文案，避免裸 404/502 误伤 SPA 页面。"""
+        try:
+            page_source = (self.driver.page_source or '').lower()
+        except Exception as exc:
+            self._log_error('检测页面错误异常: %s', exc)
+            return True
+        keywords = (
+            '502 bad gateway',
+            'bad gateway',
+            '504 gateway timeout',
+            '500 internal server error',
+            '无法访问此网站',
+            '连接已重置',
+            '连接超时',
+            '页面加载失败',
+        )
+        for keyword in keywords:
+            if keyword in page_source:
+                self._log_warning('检测到页面错误关键词: %s', keyword)
+                return True
+        return False
+
+    def _ensure_video_playing(self) -> bool:
+        """保证播放；若 video 已 ended 返回 True（调用方应加快切课检测）。"""
+        from selenium.webdriver.common.by import By
+
+        try:
+            videos = self.driver.find_elements(By.TAG_NAME, 'video')
+            if videos:
+                info = self.driver.execute_script(
+                    """
+                    var v = arguments[0];
+                    return {
+                        paused: !!v.paused,
+                        ended: !!v.ended,
+                        currentTime: v.currentTime || 0
+                    };
+                    """,
+                    videos[0],
+                )
+                if info.get('ended'):
+                    self._log_info('当前视频元素已 ended，等待接口确认完成并切课')
+                    return True
+                if not info.get('paused') and info.get('currentTime', 0) > 0:
+                    return False
+        except Exception as exc:
+            self._log_warning('读取 video 状态失败: %s', exc)
+
+        self._click_video_play_button()
+        return False
 
     def _mark_custom_course_done(self, course_id: str):
         courses = self._parse_course_items(self.task.courses)

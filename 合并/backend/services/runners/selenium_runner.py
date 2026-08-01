@@ -177,8 +177,11 @@ class SeleniumTaskRunner(BaseTaskRunner):
             time.sleep(1)
 
     def _start_monitor_thread(self, target: Callable, suffix: str = 'monitor'):
+        # 监控线程独立于主线程，必须自带 Flask app_context，
+        # 否则 update_task_fields / db 操作会抛 Working outside of application context，
+        # 进而导致「播完后无法切下一集」等逻辑被 except 吞掉。
         self._monitor_thread = threading.Thread(
-            target=target,
+            target=lambda: self._run_with_context(target),
             daemon=True,
             name=f'{self.log_tag.lower()}-{suffix}-{self.task.id}',
         )

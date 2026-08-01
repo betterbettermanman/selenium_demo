@@ -323,7 +323,9 @@ export function useTaskManager() {
     try {
       const res = await taskApi.submitSmsCode(smsTaskId.value, smsCode.value.trim())
       message.success(res.message || '验证成功，任务继续执行')
+      smsModalVisible.value = false
       smsCode.value = ''
+      smsTaskId.value = null
       fetchList()
     } catch (e) {
       return Promise.reject(e)
