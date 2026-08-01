@@ -206,13 +206,33 @@
           </a-select>
         </a-form-item>
         <a-form-item label="姓名">
-          <a-input v-model:value="form.nick_name" placeholder="可选" size="large" />
+          <a-input
+            v-model:value="form.nick_name"
+            placeholder="先选网站，再输入姓名可匹配用户"
+            size="large"
+            :disabled="!form.website_id"
+            allow-clear
+            @update:value="onNickNameInput"
+          />
+          <div v-if="userSuggestLoading" class="user-suggest-tip">正在匹配用户…</div>
+          <div v-else-if="userSuggestOptions.length" class="user-suggest">
+            <div class="user-suggest__tip">匹配到已有用户，点击填入账号密码</div>
+            <button
+              v-for="opt in userSuggestOptions"
+              :key="opt.value"
+              type="button"
+              class="user-suggest__item"
+              @click="handleSelectUserAccount(opt.value, opt)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
         </a-form-item>
         <a-form-item label="账号" required>
           <a-input v-model:value="form.username" placeholder="请输入账号" size="large" />
         </a-form-item>
         <a-form-item label="密码" required>
-          <a-input-password v-model:value="form.password" placeholder="请输入密码" size="large" />
+          <a-input v-model:value="form.password" placeholder="请输入密码" size="large" />
         </a-form-item>
         <a-form-item label="是否收费">
           <a-select v-model:value="form.is_charged" size="large">
@@ -314,6 +334,10 @@ const {
   smsCode,
   form,
   pagination,
+  userSuggestOptions,
+  userSuggestLoading,
+  handleSelectUserAccount,
+  onNickNameInput,
   handleWebsiteChange,
   handleSearch,
   openModal,
@@ -550,6 +574,49 @@ const confirmDelete = (id) => {
 
 .mobile-form {
   padding-bottom: 16px;
+}
+
+.user-suggest-tip {
+  margin-top: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.user-suggest {
+  margin-top: 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.user-suggest__tip {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.user-suggest__item {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.user-suggest__item:last-child {
+  border-bottom: 0;
+}
+
+.user-suggest__item:active {
+  background: #e6f4ff;
+  color: #1677ff;
 }
 </style>
 

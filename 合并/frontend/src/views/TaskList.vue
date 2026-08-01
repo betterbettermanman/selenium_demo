@@ -161,13 +161,32 @@
           </a-select>
         </a-form-item>
         <a-form-item label="姓名">
-          <a-input v-model:value="form.nick_name" placeholder="请输入姓名（可选）" />
+          <a-input
+            v-model:value="form.nick_name"
+            placeholder="请先选网站，再输入姓名可匹配已有用户"
+            :disabled="!form.website_id"
+            allow-clear
+            @update:value="onNickNameInput"
+          />
+          <div v-if="userSuggestLoading" class="user-suggest-tip">正在匹配用户…</div>
+          <div v-else-if="userSuggestOptions.length" class="user-suggest">
+            <div class="user-suggest__tip">匹配到已有用户，点击填入账号密码</div>
+            <button
+              v-for="opt in userSuggestOptions"
+              :key="opt.value"
+              type="button"
+              class="user-suggest__item"
+              @click="handleSelectUserAccount(opt.value, opt)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
         </a-form-item>
         <a-form-item label="账号" required>
           <a-input v-model:value="form.username" placeholder="请输入账号" />
         </a-form-item>
         <a-form-item label="密码" required>
-          <a-input-password v-model:value="form.password" placeholder="请输入密码" />
+          <a-input v-model:value="form.password" placeholder="请输入密码" />
         </a-form-item>
         <a-form-item label="是否收费">
           <a-select v-model:value="form.is_charged">
@@ -234,6 +253,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { LoadingOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { courseApi, taskApi, websiteApi } from '../api'
+import { useUserAccountSuggest } from '../composables/useUserAccountSuggest'
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70, fixed: 'left' },
@@ -282,6 +302,15 @@ const form = reactive({
   remark: '',
 })
 
+const {
+  userSuggestOptions,
+  userSuggestLoading,
+  handleSelectUserAccount,
+  clearUserSuggest,
+  onNickNameInput,
+  onWebsiteChangeForSuggest,
+} = useUserAccountSuggest(form)
+
 const pagination = reactive({
   current: 1,
   pageSize: 10,
@@ -307,8 +336,11 @@ const fetchCoursesByWebsite = async (websiteId, keepCourseId = undefined) => {
     courseOptions.value = res.data.list || []
     if (keepCourseId && courseOptions.value.some((item) => item.id === keepCourseId)) {
       form.course_id = keepCourseId
-    } else if (!courseOptions.value.some((item) => item.id === form.course_id)) {
-      form.course_id = undefined
+    } else if (courseOptions.value.some((item) => item.id === form.course_id)) {
+      // 当前课程仍属于该网站，保留
+    } else {
+      // 新增或切换网站：默认选中第一门课程
+      form.course_id = courseOptions.value[0]?.id
     }
   } finally {
     courseLoading.value = false
@@ -317,6 +349,7 @@ const fetchCoursesByWebsite = async (websiteId, keepCourseId = undefined) => {
 
 const handleWebsiteChange = (websiteId) => {
   fetchCoursesByWebsite(websiteId)
+  onWebsiteChangeForSuggest()
 }
 
 const fetchList = async () => {
@@ -402,6 +435,7 @@ const resetForm = () => {
   form.price = undefined
   form.remark = ''
   courseOptions.value = []
+  clearUserSuggest()
 }
 
 const openModal = async (record = null) => {
@@ -633,5 +667,48 @@ onMounted(() => {
 
 .running-status__icon {
   font-size: 12px;
+}
+
+.user-suggest-tip {
+  margin-top: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.user-suggest {
+  margin-top: 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.user-suggest__tip {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.user-suggest__item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.user-suggest__item:last-child {
+  border-bottom: 0;
+}
+
+.user-suggest__item:hover {
+  background: #e6f4ff;
+  color: #1677ff;
 }
 </style>

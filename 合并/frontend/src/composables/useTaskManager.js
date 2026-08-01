@@ -1,6 +1,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { courseApi, taskApi, websiteApi } from '../api'
+import { useUserAccountSuggest } from './useUserAccountSuggest'
 
 export function useTaskManager() {
   const loading = ref(false)
@@ -35,6 +36,15 @@ export function useTaskManager() {
     remark: '',
   })
 
+  const {
+    userSuggestOptions,
+    userSuggestLoading,
+    handleSelectUserAccount,
+    clearUserSuggest,
+    onNickNameInput,
+    onWebsiteChangeForSuggest,
+  } = useUserAccountSuggest(form)
+
   const pagination = reactive({
     current: 1,
     pageSize: 10,
@@ -60,8 +70,11 @@ export function useTaskManager() {
       courseOptions.value = res.data.list || []
       if (keepCourseId && courseOptions.value.some((item) => item.id === keepCourseId)) {
         form.course_id = keepCourseId
-      } else if (!courseOptions.value.some((item) => item.id === form.course_id)) {
-        form.course_id = undefined
+      } else if (courseOptions.value.some((item) => item.id === form.course_id)) {
+        // 当前课程仍属于该网站，保留
+      } else {
+        // 新增或切换网站：默认选中第一门课程
+        form.course_id = courseOptions.value[0]?.id
       }
     } finally {
       courseLoading.value = false
@@ -70,6 +83,7 @@ export function useTaskManager() {
 
   const handleWebsiteChange = (websiteId) => {
     fetchCoursesByWebsite(websiteId)
+    onWebsiteChangeForSuggest()
   }
 
   const fetchList = async () => {
@@ -155,6 +169,7 @@ export function useTaskManager() {
     form.price = undefined
     form.remark = ''
     courseOptions.value = []
+    clearUserSuggest()
   }
 
   const openModal = async (record = null) => {
@@ -394,6 +409,10 @@ export function useTaskManager() {
     smsTaskId,
     form,
     pagination,
+    userSuggestOptions,
+    userSuggestLoading,
+    handleSelectUserAccount,
+    onNickNameInput,
     fetchWebsites,
     fetchCoursesByWebsite,
     handleWebsiteChange,
