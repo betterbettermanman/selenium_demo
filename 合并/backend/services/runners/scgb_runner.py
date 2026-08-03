@@ -32,6 +32,9 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         self.is_must = True
         self._last_watch_times = None
         self._watch_times_stale_rounds = 0
+        self._stale_reload_count = 0
+        self._auth_expired = False
+        self._auth_fail_rounds = 0
         self.api_headers = {
             'User-Agent': 'Mozilla/5.0',
             'Accept': '*/*',
@@ -213,10 +216,22 @@ class ScgbTaskRunner(SeleniumTaskRunner):
 
         while not self.is_complete and self.is_running:
             try:
+                if not self._is_browser_alive():
+                    self._log_error('浏览器会话已断开，停止监控（请重新启动任务）')
+                    self.is_running = False
+                    break
+
+                if self._auth_expired:
+                    self._handle_login_expired()
+                    break
+
                 # SPA 源码常误含裸 "404"/"502"，基类 check_page_error 易误判并跳过切课逻辑
                 if self._scgb_page_error():
-                    self._log_warning('页面异常，重新打开课程')
-                    self._open_course_and_play()
+                    self._log_warning('页面异常，先检查登录态再刷新')
+                    if not self._ensure_login_valid():
+                        self._handle_login_expired()
+                        break
+                    self._reload_current_course()
                     time.sleep(10)
                     continue
 
@@ -229,27 +244,43 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                     continue
                 null_course_rounds = 0
 
-                # watchTimes 连续两轮不变 → 进度停滞，主动换课（对齐原版 sleep_time_num）
-                if self._watch_times_stale_rounds >= 1:
-                    self._log_warning(
-                        '课程 %s 进度停滞，重新打开下一课',
-                        self.current_course_id,
-                    )
-                    self._reset_progress_tracker()
-                    self.current_course_id = ''
-                    self.current_course_class_id = ''
-                    self._open_course_and_play()
-                    time.sleep(10)
+                # watchTimes 多轮不变：先强制刷新当前课续播，禁止误开「同一门未完成课」空转
+                if self._watch_times_stale_rounds >= 2:
+                    self._stale_reload_count += 1
+                    if self._stale_reload_count >= 3:
+                        self._log_warning(
+                            '课程 %s 多次刷新仍无进度，跳过并切换下一门',
+                            self.current_course_id,
+                        )
+                        self._skip_stuck_course(self.current_course_id)
+                        sleep_time = 20
+                    else:
+                        self._log_warning(
+                            '课程 %s 进度停滞，强制刷新当前课续播 (%s/3)',
+                            self.current_course_id,
+                            self._stale_reload_count,
+                        )
+                        self._reload_current_course()
+                        sleep_time = 30
                     continue
 
                 detail = self._fetch_course_detail(self.current_course_id)
+                if self._auth_expired:
+                    self._handle_login_expired()
+                    break
                 if not detail:
+                    self._auth_fail_rounds += 1
                     self._sync_api_headers()
+                    if self._auth_fail_rounds >= 3 and not self._ensure_login_valid():
+                        self._handle_login_expired()
+                        break
                     sleep_time = 15
                 elif detail['totalPeriod'] <= detail['watchTimes']:
+                    self._auth_fail_rounds = 0
                     self._log_info('课程 %s 已观看完成，立即续播下一门', self.current_course_id)
                     self._mark_custom_course_done(self.current_course_id)
                     self._reset_progress_tracker()
+                    self._stale_reload_count = 0
                     self.current_course_id = ''
                     self.current_course_class_id = ''
                     if self._has_more_study_work():
@@ -260,26 +291,44 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                         self.is_complete = True
                         break
                 else:
+                    self._auth_fail_rounds = 0
                     watched = int(detail['watchTimes'])
                     remain = int(detail['totalPeriod']) - watched
-                    sleep_time = max(30, min(remain, 1200))
+                    # 上限 600s：接口常按整点上报，过长睡眠会误判停滞且难以及时点播放
+                    sleep_time = max(30, min(remain, 600))
                     if self._last_watch_times == watched:
                         self._watch_times_stale_rounds += 1
                     else:
                         self._last_watch_times = watched
                         self._watch_times_stale_rounds = 0
+                        self._stale_reload_count = 0
                     self._log_info(
-                        '课程 %s 播放中 total=%s watched=%s 下次检测间隔=%ss',
+                        '课程 %s 播放中 total=%s watched=%s stale=%s 下次检测间隔=%ss',
                         self.current_course_id,
                         detail['totalPeriod'],
                         detail['watchTimes'],
+                        self._watch_times_stale_rounds,
                         sleep_time,
                     )
-                    if self._ensure_video_playing():
-                        # 播放器已结束但接口尚未记满，缩短等待以便尽快切课
+                    ended = self._ensure_video_playing()
+                    if ended:
                         sleep_time = min(sleep_time, 30)
+                    elif self._watch_times_stale_rounds > 0:
+                        # 已出现停滞迹象，缩短间隔以便尽快点播/刷新
+                        sleep_time = min(sleep_time, 120)
             except Exception as exc:
+                if self._is_session_dead_error(exc) or not self._is_browser_alive():
+                    self._log_error(
+                        '浏览器会话已断开（不是登录过期），停止监控。请重新启动任务: %s',
+                        exc,
+                    )
+                    self.is_running = False
+                    break
                 self._log_warning('进度检测异常: %s', exc)
+                # 异常时先判断登录是否过期
+                if not self._ensure_login_valid():
+                    self._handle_login_expired()
+                    break
                 sleep_time = 20
 
             time.sleep(sleep_time)
@@ -292,6 +341,79 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                 return course
         return None
 
+    def _goto_scgb_url(self, url: str, settle_seconds: float = 2):
+        """打开 SCGB 的 hash 路由页。
+
+        站点为 Vue hash 模式（#/course、#/myClass）。若当前已在同域，
+        仅改 hash 时浏览器常不整页刷新，课程组件不会重新挂载，表现为
+        「打开新课但不刷新、需手动 F5」。先离开再进入（对齐原版 scgb.py）。
+        """
+        try:
+            current = self.driver.current_url or ''
+        except Exception:
+            current = ''
+        if 'web.scgb.gov.cn' in current or current.startswith('about:'):
+            self._log_info('hash 路由先离开当前页再进入，避免不刷新')
+            try:
+                self.driver.get('about:blank')
+                time.sleep(0.5)
+            except Exception:
+                self.driver.get(SCGB_HOME_URL)
+                time.sleep(1)
+        self.driver.get(url)
+        time.sleep(settle_seconds)
+        # 再 refresh 一次，确保播放页真正重新挂载
+        try:
+            self.driver.refresh()
+            time.sleep(max(1.0, settle_seconds))
+        except Exception as exc:
+            self._log_warning('打开后 refresh 失败: %s', exc)
+
+    def _build_course_url(self, course_id: str, class_id: str = '') -> str:
+        class_id = class_id or ''
+        if class_id:
+            return (
+                f'https://web.scgb.gov.cn/#/course?id={course_id}'
+                f'&className=&classId={class_id}'
+            )
+        return f'https://web.scgb.gov.cn/#/course?id={course_id}&className='
+
+    def _reload_current_course(self):
+        """进度停滞/页面异常：强制刷新当前课并续播，不切换到下一门。"""
+        course_id = self.current_course_id
+        class_id = self.current_course_class_id or (self.task.class_id or '')
+        if not course_id:
+            self._open_course_and_play()
+            return
+        if not self._is_browser_alive():
+            return
+        url = self._build_course_url(course_id, str(class_id))
+        self._log_info('强制刷新当前课程播放页: %s', url)
+        self._goto_scgb_url(url, settle_seconds=2)
+        self._close_course_modal2()
+        self._click_video_play_button()
+        self._reset_progress_tracker()
+
+    def _skip_stuck_course(self, course_id: str):
+        """多次刷新仍无进度：记入跳过列表并尝试下一门。"""
+        if not course_id:
+            return
+        skip = list(self.task.no_play_videos or [])
+        if course_id not in skip:
+            skip.append(course_id)
+            update_task_fields(self.task, no_play_videos=skip)
+            self._log_warning('已将课程加入不播放列表: %s', course_id)
+        self._mark_custom_course_done(course_id)
+        self._reset_progress_tracker()
+        self._stale_reload_count = 0
+        self.current_course_id = ''
+        self.current_course_class_id = ''
+        if self._has_more_study_work():
+            self._open_course_and_play()
+        else:
+            self._log_info('无更多可学课程，结束任务')
+            self.is_complete = True
+
     def _open_custom_course(self, course):
         course_id = course.get('id')
         if not course_id:
@@ -299,21 +421,15 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             return
 
         class_id = course.get('classId') or self.task.class_id
-        if class_id:
-            course_url = (
-                f'https://web.scgb.gov.cn/#/course?id={course_id}'
-                f'&className=&classId={class_id}'
-            )
-        else:
-            course_url = f'https://web.scgb.gov.cn/#/course?id={course_id}&className='
-        self._log_info('直接打开课程播放页: %s', course_url)
-        self.driver.get(course_url)
-        time.sleep(2)
+        course_url = self._build_course_url(course_id, str(class_id or ''))
+        self._log_info('打开课程播放页: %s', course_url)
+        self._goto_scgb_url(course_url, settle_seconds=2)
         self._close_course_modal2()
         self._click_video_play_button()
         self.current_course_id = course_id
         self.current_course_class_id = str(class_id or '')
         self._reset_progress_tracker()
+        self._stale_reload_count = 0
         self._log_info('当前课程ID: %s classId=%s', self.current_course_id, self.current_course_class_id)
 
     def _open_class_course_detail(self, label: str):
@@ -323,8 +439,10 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support.wait import WebDriverWait
 
         self._log_info('进行%s学习', label)
-        self.driver.get(f'https://web.scgb.gov.cn/#/myClass?id={self.task.class_id}&collected=1')
-        time.sleep(1)
+        self._goto_scgb_url(
+            f'https://web.scgb.gov.cn/#/myClass?id={self.task.class_id}&collected=1',
+            settle_seconds=1,
+        )
         try:
             WebDriverWait(self.driver, 10).until(
                 EC.invisibility_of_element_located((By.CLASS_NAME, 'el-loading-spinner'))
@@ -451,24 +569,88 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         try:
             response = requests.post(url, headers=self.api_headers, json=payload, timeout=10)
             if response.status_code == 401:
-                self._log_warning('登录已过期，尝试刷新 token')
+                self._log_warning('课程详情接口 401，尝试从页面刷新 token')
                 self._sync_api_headers()
-                return None
+                response = requests.post(url, headers=self.api_headers, json=payload, timeout=10)
+                if response.status_code == 401:
+                    self._log_warning('刷新 token 后仍 401，判定登录已过期')
+                    self._auth_expired = True
+                    return None
             response.raise_for_status()
-            return response.json().get('result')
+            result = response.json().get('result')
+            if result is not None:
+                self._auth_expired = False
+            return result
         except Exception:
             self._log_exception('查询课程详情失败 course_id=%s', course_id)
             return None
 
+    def _ensure_login_valid(self) -> bool:
+        """浏览器仍在时检查 localStorage token 是否有效。"""
+        if not self._is_browser_alive():
+            return False
+        try:
+            if self._is_logged_in():
+                self._auth_expired = False
+                return True
+        except Exception as exc:
+            if self._is_session_dead_error(exc):
+                return False
+            self._log_warning('检查登录态异常: %s', exc)
+        self._sync_api_headers()
+        try:
+            ok = self._is_logged_in()
+        except Exception:
+            ok = False
+        if not ok:
+            self._auth_expired = True
+        return ok
+
+    def _handle_login_expired(self):
+        """登录过期：停止任务，提示用户重新启动并完成短信验证。"""
+        self._log_error('登录已过期或失效，停止任务。请重新启动任务并完成手机验证码登录')
+        self._auth_expired = True
+        self.is_running = False
+        try:
+            update_task_fields(self.task, status='1')
+        except Exception:
+            self._log_exception('登录过期后更新任务状态失败')
+
     def _reset_progress_tracker(self):
         self._last_watch_times = None
         self._watch_times_stale_rounds = 0
+
+    @staticmethod
+    def _is_session_dead_error(exc) -> bool:
+        msg = str(exc or '').lower()
+        return any(
+            key in msg
+            for key in (
+                'invalid session',
+                'session deleted',
+                'disconnected',
+                'not connected to devtools',
+                'chrome not reachable',
+                'no such window',
+            )
+        )
+
+    def _is_browser_alive(self) -> bool:
+        if not self.driver:
+            return False
+        try:
+            _ = self.driver.current_url
+            return True
+        except Exception:
+            return False
 
     def _scgb_page_error(self) -> bool:
         """仅匹配明确的网关/超时文案，避免裸 404/502 误伤 SPA 页面。"""
         try:
             page_source = (self.driver.page_source or '').lower()
         except Exception as exc:
+            if self._is_session_dead_error(exc):
+                raise
             self._log_error('检测页面错误异常: %s', exc)
             return True
         keywords = (
@@ -497,6 +679,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                 info = self.driver.execute_script(
                     """
                     var v = arguments[0];
+                    try { v.muted = false; } catch (e) {}
                     return {
                         paused: !!v.paused,
                         ended: !!v.ended,
@@ -510,7 +693,21 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                     return True
                 if not info.get('paused') and info.get('currentTime', 0) > 0:
                     return False
+                # 暂停/未开播：优先 JS play，再点大播放按钮
+                try:
+                    self.driver.execute_script(
+                        """
+                        var v = arguments[0];
+                        var p = v.play();
+                        if (p && typeof p.catch === 'function') p.catch(function(){});
+                        """,
+                        videos[0],
+                    )
+                except Exception:
+                    pass
         except Exception as exc:
+            if self._is_session_dead_error(exc):
+                raise
             self._log_warning('读取 video 状态失败: %s', exc)
 
         self._click_video_play_button()

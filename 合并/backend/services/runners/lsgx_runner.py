@@ -214,7 +214,9 @@ class LsgxTaskRunner(SeleniumTaskRunner):
                 """, video)
             except Exception as exc:
                 self._log_warning('获取视频进度失败: %s', exc)
-                time.sleep(sleep_time)
+                self._log_warning('未找到播放器，重新打开播放页面')
+                self._open_course_home()
+                time.sleep(30)
                 continue
 
             try:
@@ -230,7 +232,8 @@ class LsgxTaskRunner(SeleniumTaskRunner):
                 elif info['paused'] or info['currentTime'] == 0:
                     reason = '暂停' if info['paused'] and info['currentTime'] > 0 else '未开始'
                     self._log_info('视频%s，尝试继续播放', reason)
-                    self._resume_video(video)
+                    if not self._resume_video(video):
+                        self._log_warning('继续播放失败，稍后重试 currentTime=%.1f', info['currentTime'])
                     time.sleep(5)
             except Exception as exc:
                 self._log_warning('处理播放状态失败: %s', exc)
@@ -239,42 +242,107 @@ class LsgxTaskRunner(SeleniumTaskRunner):
 
         self._log_info('播放监控结束 user=%s', self.task.username)
 
-    def _resume_video(self, video):
-        """避免原生 click 被标题/遮罩拦截，优先 JS play / 点击播放按钮。"""
+    def _video_still_paused(self, video) -> bool:
+        try:
+            return bool(self.driver.execute_script(
+                'var v = arguments[0]; return !v || !!v.paused;', video
+            ))
+        except Exception:
+            return True
+
+    def _resume_video(self, video) -> bool:
+        """恢复播放：优先真实点击（可过自动播放策略），失败再试 play()/遮罩。"""
+        from selenium.webdriver.common.action_chains import ActionChains
         from selenium.webdriver.common.by import By
 
-        # 1) 直接调用 HTMLVideoElement.play()
+        # 0) 站点暂停中心遮罩（原脚本 pausecenter）
         try:
-            self.driver.execute_script("""
-                var video = arguments[0];
-                try { video.muted = false; } catch (e) {}
-                var p = video.play();
-                if (p && typeof p.catch === 'function') {
-                    p.catch(function () {});
-                }
-            """, video)
-            return
+            overlays = self.driver.find_elements(
+                By.XPATH, '//div[starts-with(@class, "pausecenter")]'
+            )
+            for el in overlays:
+                if not el.is_displayed():
+                    continue
+                try:
+                    el.click()
+                except Exception:
+                    self.driver.execute_script('arguments[0].click();', el)
+                self._log_info('已点击 pausecenter 遮罩')
+                time.sleep(1)
+                if not self._video_still_paused(video):
+                    return True
         except Exception as exc:
-            self._log_warning('JS play() 失败: %s', exc)
+            self._log_warning('处理 pausecenter 失败: %s', exc)
 
-        # 2) Video.js 大播放按钮
+        # 1) 控制条 / 大播放按钮：优先 Selenium 原生 click（算用户手势）
         for selector in (
-            '.vjs-big-play-button',
             'button.vjs-play-control',
+            '.vjs-big-play-button',
             '.vjs-play-control',
+            'button.vjs-big-play-button',
         ):
             try:
-                btns = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                for btn in btns:
+                for btn in self.driver.find_elements(By.CSS_SELECTOR, selector):
                     if not btn.is_displayed():
                         continue
-                    self.driver.execute_script('arguments[0].click();', btn)
-                    return
+                    try:
+                        btn.click()
+                    except Exception:
+                        self.driver.execute_script('arguments[0].click();', btn)
+                    time.sleep(0.8)
+                    if not self._video_still_paused(video):
+                        self._log_info('通过 %s 恢复播放', selector)
+                        return True
             except Exception:
                 continue
 
-        # 3) 最后兜底：JS 点击 video（仍可能被策略拦截，但比原生 click 稳）
+        # 2) 原生点击 video（对齐原版 main.py，比 JS play 更易过策略）
+        for clicker in (
+            lambda: video.click(),
+            lambda: ActionChains(self.driver).move_to_element(video).click().perform(),
+            lambda: self.driver.execute_script('arguments[0].click();', video),
+        ):
+            try:
+                clicker()
+                time.sleep(0.8)
+                if not self._video_still_paused(video):
+                    self._log_info('通过点击 video 恢复播放')
+                    return True
+            except Exception as exc:
+                self._log_warning('点击 video 失败: %s', exc)
+
+        # 3) play()：先有声，失败再静音重试；必须等 Promise，不能吞错后当成功
         try:
-            self.driver.execute_script('arguments[0].click();', video)
+            ok = self.driver.execute_async_script(
+                """
+                var video = arguments[0];
+                var done = arguments[arguments.length - 1];
+                function tryPlay(muted) {
+                    try { video.muted = !!muted; } catch (e) {}
+                    var p = video.play();
+                    if (!p || typeof p.then !== 'function') {
+                        done(!video.paused);
+                        return;
+                    }
+                    p.then(function () { done(true); })
+                     .catch(function () {
+                        if (!muted) {
+                            tryPlay(true);
+                        } else {
+                            done(false);
+                        }
+                     });
+                }
+                tryPlay(false);
+                """,
+                video,
+            )
+            time.sleep(0.5)
+            if ok and not self._video_still_paused(video):
+                self._log_info('通过 JS play() 恢复播放')
+                return True
+            self._log_warning('JS play() 未恢复播放 ok=%s paused=%s', ok, self._video_still_paused(video))
         except Exception as exc:
-            self._log_warning('兜底点击 video 失败: %s', exc)
+            self._log_warning('JS play() 失败: %s', exc)
+
+        return not self._video_still_paused(video)
