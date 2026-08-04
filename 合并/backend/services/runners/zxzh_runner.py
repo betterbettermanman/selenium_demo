@@ -25,7 +25,7 @@ ZXZH_HOME_URL = 'https://basic.smartedu.cn/'
 ZXZH_LOGIN_URL = 'https://auth.smartedu.cn/uias/login'
 SLIDER_MAX_RETRY = 8
 CREDIT_TARGET = 10
-VIDEO_POLL_SECONDS = 30
+VIDEO_POLL_SECONDS = 60
 VIDEO_MAX_WAIT_SECONDS = 3 * 60 * 60  # 单节最长等待 3 小时
 # 专题页单课进度：已学习 2.15 / 已认定 2.00 / 认定 2 学时
 COURSE_LEARNED_PATTERN = re.compile(r'已学习\s*([\d.]+)')
@@ -34,6 +34,11 @@ COURSE_CREDIT_PATTERN = re.compile(
 )
 COURSE_CREDIT_SCAN_CHARS = 800
 COURSE_CREDIT_EPS = 1e-6
+# 专题页打开后等待课程卡片渲染（总进度常先出来，课表异步更慢）
+TRAINING_PAGE_LOAD_SECONDS = 8
+COURSE_CARD_WAIT_SECONDS = 20
+COURSE_PROGRESS_RETRY = 6
+COURSE_PROGRESS_RETRY_INTERVAL = 2.0
 # 专题页「总进度」：已认定 / 要求认定（class 带 hash，用 contains 匹配）
 TOTAL_PROGRESS_BLOCK_XPATH = (
     "//*[contains(@class,'topprocess') and contains(.,'要求认定')]"
@@ -400,14 +405,41 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
     def _open_training_home(self):
         self._log_info('打开专题页 %s', self.training_url)
         self.driver.get(self.training_url)
-        time.sleep(5)
+        time.sleep(TRAINING_PAGE_LOAD_SECONDS)
         # 未登录会被踢到登录页
         if 'auth.smartedu.cn' in (self.driver.current_url or ''):
             self._log_warning('打开专题页时跳到登录，重新登录')
             self._ensure_logged_in(max_rounds=2)
             self.driver.get(self.training_url)
-            time.sleep(5)
+            time.sleep(TRAINING_PAGE_LOAD_SECONDS)
         self.list_window = self.driver.current_window_handle
+        self._wait_training_course_cards()
+
+    def _wait_training_course_cards(self):
+        """等待专题页课程卡片出现（标题文本进 DOM），避免读进度过早失败。"""
+        titles = [str(c.get('title') or '').strip() for c in self.course_list if c.get('title')]
+        if not titles:
+            return
+        deadline = time.time() + COURSE_CARD_WAIT_SECONDS
+        last_body_len = 0
+        while time.time() < deadline and self.is_running and not self._stopped:
+            body = self._training_page_text()
+            last_body_len = len(body)
+            hit = next((t for t in titles if t in body), None)
+            if hit:
+                self._log_info(
+                    '专题页课程卡片已就绪 matched=%s body_len=%s',
+                    hit[:40], last_body_len,
+                )
+                # 卡片刚出现时学时文案可能仍在刷新，稍等稳定
+                time.sleep(2)
+                return
+            time.sleep(1)
+        self._log_warning(
+            '等待专题页课程卡片超时 %ss body_len=%s sample_title=%s',
+            COURSE_CARD_WAIT_SECONDS, last_body_len,
+            (titles[0][:40] if titles else ''),
+        )
 
     def _read_training_hours(self) -> tuple[float, float]:
         """从专题页解析 (当前已认定学时, 要求认定学时)。
@@ -535,39 +567,70 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             return self.driver.page_source or ''
 
     def _read_course_progress(self, title: str) -> dict[str, float] | None:
-        """从专题页解析某门课进度：已学习 / 已认定 / 认定。匹配失败返回 None。"""
+        """从专题页解析某门课进度：已学习 / 已认定 / 认定。匹配失败返回 None。
+
+        课表异步加载时会重试等待，避免刚打开专题页就判定「找不到标题」。
+        """
         title = (title or '').strip()
         if not title:
             return None
-        body = self._training_page_text()
-        idx = body.find(title)
-        if idx < 0:
-            self._log_warning('专题页未找到课程标题，无法读学时进度: %s', title)
-            return None
-        window = body[idx:idx + COURSE_CREDIT_SCAN_CHARS]
-        credit_m = COURSE_CREDIT_PATTERN.search(window)
-        if not credit_m:
-            self._log_warning('课程卡片未解析到认定学时: %s', title)
-            return None
-        try:
-            accredited = float(credit_m.group(1))
-            required = float(credit_m.group(2))
-        except (TypeError, ValueError):
-            return None
 
-        learned = accredited
-        learned_m = COURSE_LEARNED_PATTERN.search(window)
-        if learned_m:
+        last_reason = ''
+        for attempt in range(1, COURSE_PROGRESS_RETRY + 1):
+            body = self._training_page_text()
+            idx = body.find(title)
+            if idx < 0:
+                last_reason = '未找到课程标题'
+                self._log_info(
+                    '读课程进度等待中 %s attempt=%s/%s reason=%s',
+                    title, attempt, COURSE_PROGRESS_RETRY, last_reason,
+                )
+                if attempt < COURSE_PROGRESS_RETRY:
+                    time.sleep(COURSE_PROGRESS_RETRY_INTERVAL)
+                continue
+
+            window = body[idx:idx + COURSE_CREDIT_SCAN_CHARS]
+            credit_m = COURSE_CREDIT_PATTERN.search(window)
+            if not credit_m:
+                last_reason = '未解析到认定学时'
+                self._log_info(
+                    '读课程进度等待中 %s attempt=%s/%s reason=%s',
+                    title, attempt, COURSE_PROGRESS_RETRY, last_reason,
+                )
+                if attempt < COURSE_PROGRESS_RETRY:
+                    time.sleep(COURSE_PROGRESS_RETRY_INTERVAL)
+                continue
+
             try:
-                learned = float(learned_m.group(1))
+                accredited = float(credit_m.group(1))
+                required = float(credit_m.group(2))
             except (TypeError, ValueError):
-                pass
+                return None
 
-        return {
-            'learned': learned,
-            'accredited': accredited,
-            'required': required,
-        }
+            learned = accredited
+            learned_m = COURSE_LEARNED_PATTERN.search(window)
+            if learned_m:
+                try:
+                    learned = float(learned_m.group(1))
+                except (TypeError, ValueError):
+                    pass
+
+            if attempt > 1:
+                self._log_info(
+                    '读课程进度成功 %s attempt=%s 已学习=%s 已认定=%s / 认定=%s',
+                    title, attempt, learned, accredited, required,
+                )
+            return {
+                'learned': learned,
+                'accredited': accredited,
+                'required': required,
+            }
+
+        self._log_warning(
+            '专题页无法读学时进度: %s reason=%s retries=%s',
+            title, last_reason or 'unknown', COURSE_PROGRESS_RETRY,
+        )
+        return None
 
     def _read_course_credit(self, title: str) -> tuple[float, float] | None:
         """兼容旧调用：返回 (已认定, 认定)。"""

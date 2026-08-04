@@ -44,17 +44,33 @@ class SeleniumTaskRunner(BaseTaskRunner):
     def log_tag(self) -> str:
         return self.website.code or 'RUNNER'
 
+    @property
+    def log_task_id(self):
+        return getattr(self.task, 'id', None) or '?'
+
     def _log_info(self, msg: str, *args):
-        logger.info('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
+        logger.info(
+            '[%s][taskId=%s][%s] ' + msg,
+            self.log_tag, self.log_task_id, self.log_user_label, *args,
+        )
 
     def _log_warning(self, msg: str, *args):
-        logger.warning('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
+        logger.warning(
+            '[%s][taskId=%s][%s] ' + msg,
+            self.log_tag, self.log_task_id, self.log_user_label, *args,
+        )
 
     def _log_error(self, msg: str, *args):
-        logger.error('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
+        logger.error(
+            '[%s][taskId=%s][%s] ' + msg,
+            self.log_tag, self.log_task_id, self.log_user_label, *args,
+        )
 
     def _log_exception(self, msg: str, *args):
-        logger.exception('[%s][%s] ' + msg, self.log_tag, self.log_user_label, *args)
+        logger.exception(
+            '[%s][taskId=%s][%s] ' + msg,
+            self.log_tag, self.log_task_id, self.log_user_label, *args,
+        )
 
     def _browser_user_data_dir(self) -> str:
         return os.path.join(

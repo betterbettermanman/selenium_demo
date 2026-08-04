@@ -10,6 +10,7 @@ from routes.website import website_bp
 from routes.course import course_bp
 from routes.task import task_bp
 from routes.user_account import user_account_bp
+from utils.logging_setup import setup_logging
 from utils.perf_log import setup_perf_logging
 import services.runners  # noqa: F401  注册任务执行器
 
@@ -17,7 +18,7 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
 
 
 def create_app():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    setup_logging()
     app = Flask(__name__)
     app.config.from_object(Config)
 
