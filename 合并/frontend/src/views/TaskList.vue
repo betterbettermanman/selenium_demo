@@ -31,11 +31,14 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1520 }"
+      :scroll="{ x: 1690 }"
       row-key="id"
       @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'completed_time'">
+          {{ record.completed_time || '-' }}
+        </template>
         <template v-if="column.key === 'website_course'">
           <div class="stacked-cell">
             <div class="stacked-cell__primary">{{ record.website_name || '-' }}</div>
@@ -267,6 +270,7 @@ const columns = [
   { title: '状态', key: 'status', width: 170 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
+  { title: '完成时间', dataIndex: 'completed_time', key: 'completed_time', width: 170 },
   { title: '操作', key: 'action', width: 340, fixed: 'right' },
 ]
 

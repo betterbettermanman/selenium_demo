@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS `task` (
   `website_code` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '网站编码',
   `create_time` datetime DEFAULT NULL COMMENT '创建日期',
   `update_time` datetime DEFAULT NULL COMMENT '更新日期',
+  `completed_time` datetime DEFAULT NULL COMMENT '完成时间',
   PRIMARY KEY (`id`) USING BTREE,
   KEY `idx_task_website_code` (`website_code`),
   KEY `idx_task_status_id` (`status`, `id`)

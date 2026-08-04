@@ -193,7 +193,7 @@ def export_tasks():
 
     headers = [
         'ID', '网站名称', '课程名称', '姓名', '单位名称', '账号', '密码',
-        '无头模式', '是否收费', '价格', '状态', '备注', '创建时间', '更新时间',
+        '无头模式', '是否收费', '价格', '状态', '备注', '创建时间', '完成时间', '更新时间',
     ]
     wb = Workbook()
     ws = wb.active
@@ -218,6 +218,7 @@ def export_tasks():
             '完成' if row.get('status') == '2' else '未完成',
             row.get('remark', ''),
             row.get('create_time', ''),
+            row.get('completed_time', ''),
             row.get('update_time', ''),
         ])
 
@@ -343,6 +344,9 @@ def update_task(item_id):
     for field in simple_fields:
         if field in data:
             setattr(item, field, data[field])
+
+    if data.get('status') == '2':
+        item.completed_time = datetime.now()
 
     sync_user_account_from_task(
         website_code=item.website_code,

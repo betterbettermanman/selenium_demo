@@ -776,6 +776,27 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         except TimeoutException:
             self._log_warning('未找到控制条')
 
+    def _read_video_progress(self) -> dict | None:
+        """读取 Video.js 播放器进度（#vjs_video_1_html5_api / video.vjs-tech）。"""
+        try:
+            info = self.driver.execute_script(
+                """
+                const v = document.querySelector('video#vjs_video_1_html5_api, video.vjs-tech, video');
+                if (!v) return null;
+                return {
+                    currentTime: v.currentTime || 0,
+                    duration: v.duration || 0,
+                    paused: !!v.paused,
+                    ended: !!v.ended
+                };
+                """
+            )
+            if not isinstance(info, dict):
+                return None
+            return info
+        except Exception:
+            return None
+
     def _wait_video_finished(self) -> bool:
         """轮询等待「再学一遍」出现。"""
         from selenium.webdriver.common.by import By
@@ -793,23 +814,47 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             except Exception:
                 pass
 
-            # 暂停则尝试继续播
+            # 暂停则尝试继续播，并打印当前视频进度
             try:
                 self.driver.execute_script(
                     """
-                    const v = document.querySelector('video');
+                    const v = document.querySelector('video#vjs_video_1_html5_api, video.vjs-tech, video');
                     if (v && v.paused) v.play();
                     """
                 )
             except Exception:
                 pass
 
+            info = self._read_video_progress()
+            if info:
+                cur = float(info.get('currentTime') or 0)
+                dur = float(info.get('duration') or 0)
+                pct = (cur / dur * 100) if dur > 0 else 0.0
+                self._log_info(
+                    '视频进度 %.1f%% (%s/%s) paused=%s ended=%s 已等待 %ss',
+                    pct,
+                    self._format_seconds(cur),
+                    self._format_seconds(dur) if dur > 0 else '?',
+                    info.get('paused'),
+                    info.get('ended'),
+                    elapsed,
+                )
+            else:
+                self._log_info('播放中… 未读到 video 元素，已等待 %s 秒', elapsed)
+
             time.sleep(VIDEO_POLL_SECONDS)
             elapsed += VIDEO_POLL_SECONDS
-            if elapsed % 300 == 0:
-                self._log_info('播放中… 已等待 %s 秒', elapsed)
 
         return False
+
+    @staticmethod
+    def _format_seconds(seconds: float) -> str:
+        total = max(int(seconds), 0)
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            return f'{h:02d}:{m:02d}:{s:02d}'
+        return f'{m:02d}:{s:02d}'
 
     # ----------------------------------------------------------- slider
     def _solve_tencent_slider(self, max_retry: int = SLIDER_MAX_RETRY) -> bool:

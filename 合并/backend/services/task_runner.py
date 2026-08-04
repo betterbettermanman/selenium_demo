@@ -157,6 +157,8 @@ def _get_runner_class(website_code):
 
 
 def update_task_fields(task, **fields):
+    from datetime import datetime
+
     from models import db
     from models.task import Task
 
@@ -165,6 +167,10 @@ def update_task_fields(task, **fields):
     if not db_task:
         logger.warning('任务 %s 不存在，无法更新状态', task_id)
         return False
+
+    # 标记完成时写入完成时间；回退未完成时保留原值
+    if fields.get('status') == '2' and 'completed_time' not in fields:
+        fields = {**fields, 'completed_time': datetime.now()}
 
     for key, value in fields.items():
         setattr(db_task, key, value)

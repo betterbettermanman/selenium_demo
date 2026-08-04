@@ -90,6 +90,10 @@
                 <span class="info-label">创建</span>
                 <span class="info-value">{{ record.create_time || '-' }}</span>
               </div>
+              <div class="info-row">
+                <span class="info-label">完成</span>
+                <span class="info-value">{{ record.completed_time || '-' }}</span>
+              </div>
             </template>
             <div class="expand-hint" @click="toggleExpand(record.id)">
               {{ expandedId === record.id ? '收起详情' : '展开详情' }}

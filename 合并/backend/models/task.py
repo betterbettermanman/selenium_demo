@@ -22,6 +22,7 @@ class Task(db.Model):
     website_code = db.Column(db.String(256), comment='网站编码')
     create_time = db.Column(db.DateTime, default=datetime.now, comment='创建日期')
     update_time = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, comment='更新日期')
+    completed_time = db.Column(db.DateTime, nullable=True, default=None, comment='完成时间')
 
     def to_dict(self, include_courses=True):
         data = {
@@ -40,6 +41,9 @@ class Task(db.Model):
             'website_code': self.website_code,
             'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S') if self.create_time else None,
             'update_time': self.update_time.strftime('%Y-%m-%d %H:%M:%S') if self.update_time else None,
+            'completed_time': (
+                self.completed_time.strftime('%Y-%m-%d %H:%M:%S') if self.completed_time else None
+            ),
         }
         # 列表场景可跳过 courses，避免触发 deferred 懒加载
         if include_courses:
