@@ -76,10 +76,12 @@ def _register_engine_events(engine, slow_sql_ms: float):
         duration_ms = (time.perf_counter() - start) * 1000
         stmt = ' '.join(statement.split())
         add_query_stat(duration_ms, stmt)
-        if duration_ms >= slow_sql_ms:
-            db_perf_logger.warning('SLOW SQL %.1fms | %s', duration_ms, stmt[:500])
-        else:
-            db_perf_logger.debug('SQL %.1fms | %s', duration_ms, stmt[:200])
+        # 仅统计耗时，不逐条打印 SQL（避免刷屏）；需要时可设 LOG_SQL=1
+        if os.getenv('LOG_SQL', '0') == '1':
+            if duration_ms >= slow_sql_ms:
+                db_perf_logger.warning('SLOW SQL %.1fms | %s', duration_ms, stmt[:500])
+            else:
+                db_perf_logger.debug('SQL %.1fms | %s', duration_ms, stmt[:200])
 
     _registered_engines.add(id(engine))
 
@@ -129,8 +131,9 @@ def setup_perf_logging(app, database_uri: str):
 
         if total_ms >= slow_api_ms:
             perf_logger.warning('SLOW API | %s', base_msg)
-            for query in stats['queries']:
-                perf_logger.warning('  SQL %.1fms | %s', query['ms'], query['stmt'])
+            if os.getenv('LOG_SQL', '0') == '1':
+                for query in stats['queries']:
+                    perf_logger.warning('  SQL %.1fms | %s', query['ms'], query['stmt'])
         else:
             perf_logger.info(base_msg)
 

@@ -62,7 +62,12 @@ class BaseTaskRunner(ABC):
         self._app = app
 
     def prepare_login(self):
-        """登录准备阶段。返回 waiting_sms / ready / failed。"""
+        """登录准备阶段。
+
+        返回值：
+        - 'ready' / 'waiting_sms' / 'failed'
+        - 或 (status, message)，failed 时 message 会回传给前端提示
+        """
         return 'ready'
 
     def submit_sms_code(self, code: str):
@@ -260,11 +265,17 @@ def start_task(task_id, app):
                 pass
             return False, {'message': f'登录失败: {exc}'}
 
+        login_msg = ''
+        if isinstance(login_result, (tuple, list)):
+            status = login_result[0] if login_result else 'failed'
+            login_msg = str(login_result[1]).strip() if len(login_result) > 1 else ''
+            login_result = status
+
         if login_result == 'waiting_sms':
             runner._set_phase(RunnerPhase.WAITING_SMS)
             return True, {
                 'need_sms': True,
-                'message': '请输入手机验证码',
+                'message': login_msg or '请输入手机验证码',
                 'task_id': task_id,
             }
         if login_result == 'failed':
@@ -273,7 +284,15 @@ def start_task(task_id, app):
                 runner._cleanup()
             except Exception:
                 pass
-            return False, {'message': '登录失败，请检查账号密码'}
+            return False, {'message': login_msg or '登录失败，请检查账号密码'}
+
+        if login_result != 'ready':
+            _remove_runner(task_id)
+            try:
+                runner._cleanup()
+            except Exception:
+                pass
+            return False, {'message': login_msg or f'登录失败: {login_result}'}
 
     _start_main_thread(task_id, runner, app)
     return True, {'need_sms': False, 'message': '任务已启动', 'task_id': task_id}

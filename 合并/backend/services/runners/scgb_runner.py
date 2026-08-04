@@ -91,27 +91,60 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                 )
                 login_button.click()
 
-                try:
-                    message = WebDriverWait(self.driver, 5).until(
-                        EC.visibility_of_element_located((By.XPATH, '//div[@class="ivu-modal-header"]//p'))
-                    )
-                    if message.text == '验证码错误或已过期，请重新输入！':
-                        self._log_warning('图形验证码错误，重试 %s/%s', retry_count + 1, max_retry)
+                tip = self._wait_login_tip(timeout=5)
+                if tip:
+                    if tip == '验证码错误或已过期，请重新输入！':
+                        self._log_warning('图形验证码错误，重试 %s/%s tip=%s', retry_count + 1, max_retry, tip)
                         self._close_modal()
                         continue
-                    self._log_error('登录失败: %s', message.text)
-                    return 'failed'
-                except TimeoutException:
-                    self._log_info('图形验证码通过，等待手机验证码 user=%s', self.task.username)
-                    return 'waiting_sms'
+                    # 用户名/密码错误等，直接回传页面提示
+                    self._log_error('登录失败: %s', tip)
+                    return 'failed', tip
+
+                self._log_info('图形验证码通过，等待手机验证码 user=%s', self.task.username)
+                return 'waiting_sms'
 
             except ElementNotInteractableException:
                 self._log_error('登录输入框不可交互')
-                return 'failed'
+                return 'failed', '登录输入框不可交互'
             except Exception:
                 self._log_exception('登录异常 retry=%s', retry_count + 1)
 
-        return 'failed'
+        return 'failed', '图形验证码多次错误，登录失败'
+
+    def _wait_login_tip(self, timeout: float = 5) -> str:
+        """读取登录后弹窗/消息提示文案；无提示返回空串。"""
+        from selenium.common import TimeoutException
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+
+        # 弹窗标题（密码错误、验证码错误等）
+        try:
+            message = WebDriverWait(self.driver, timeout).until(
+                EC.visibility_of_element_located((By.XPATH, '//div[@class="ivu-modal-header"]//p'))
+            )
+            text = (message.text or '').strip()
+            if text:
+                return text
+        except TimeoutException:
+            pass
+
+        # 顶部 Message 提示兜底
+        try:
+            notices = self.driver.find_elements(
+                By.XPATH,
+                "//div[contains(@class,'ivu-message')]//span"
+                " | //div[contains(@class,'ivu-notice-desc')]"
+                " | //div[contains(@class,'ivu-notice-title')]",
+            )
+            for el in notices:
+                text = (el.text or '').strip()
+                if text and el.is_displayed():
+                    return text
+        except Exception:
+            pass
+        return ''
 
     def submit_sms_code(self, code: str):
         from selenium.webdriver.common.by import By
