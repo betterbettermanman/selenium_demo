@@ -157,7 +157,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         probe_url = self.training_url or ZXZH_HOME_URL
         self._log_info('登录前检测会话，打开 %s', probe_url)
         try:
-            self.driver.get(probe_url)
+            self._driver_get(probe_url)
             time.sleep(5)
         except Exception:
             self._log_warning('打开探测页失败，将走登录流程')
@@ -254,7 +254,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support.wait import WebDriverWait
 
         self._log_info('打开登录页 %s', ZXZH_LOGIN_URL)
-        self.driver.get(ZXZH_LOGIN_URL)
+        self._driver_get(ZXZH_LOGIN_URL)
         time.sleep(2)
 
         if self._is_logged_in() or self._has_user_avatar(timeout=3):
@@ -303,7 +303,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                 time.sleep(0.5)
 
             if not self._is_logged_in():
-                self.driver.get(ZXZH_HOME_URL)
+                self._driver_get(ZXZH_HOME_URL)
                 time.sleep(2)
 
             self._log_info('登录流程结束 logged_in=%s url=%s', self._is_logged_in(), self.driver.current_url)
@@ -404,13 +404,13 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
 
     def _open_training_home(self):
         self._log_info('打开专题页 %s', self.training_url)
-        self.driver.get(self.training_url)
+        self._driver_get(self.training_url, label='专题页')
         time.sleep(TRAINING_PAGE_LOAD_SECONDS)
         # 未登录会被踢到登录页
         if 'auth.smartedu.cn' in (self.driver.current_url or ''):
             self._log_warning('打开专题页时跳到登录，重新登录')
             self._ensure_logged_in(max_rounds=2)
-            self.driver.get(self.training_url)
+            self._driver_get(self.training_url, label='专题页')
             time.sleep(TRAINING_PAGE_LOAD_SECONDS)
         self.list_window = self.driver.current_window_handle
         self._wait_training_course_cards()
@@ -939,7 +939,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                             btn.click()
                         else:
                             # 卡在登录中则整页重进
-                            self.driver.get(ZXZH_LOGIN_URL)
+                            self._driver_get(ZXZH_LOGIN_URL)
                             time.sleep(2)
                             self._refill_login_form()
                             self.driver.find_element(By.ID, 'loginBtn').click()
@@ -980,7 +980,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                 self._log_warning('等待滑块超时，准备重开登录页')
                 self.driver.switch_to.default_content()
                 try:
-                    self.driver.get(ZXZH_LOGIN_URL)
+                    self._driver_get(ZXZH_LOGIN_URL)
                     time.sleep(2)
                     self._refill_login_form()
                     self.driver.find_element(By.ID, 'loginBtn').click()

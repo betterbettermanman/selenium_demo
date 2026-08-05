@@ -82,7 +82,7 @@ class ScxfTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support.wait import WebDriverWait
 
         self._log_info('打开登录页 %s', SCXF_LOGIN_URL)
-        self.driver.get(SCXF_LOGIN_URL)
+        self._driver_get(SCXF_LOGIN_URL)
         time.sleep(2)
 
         try:
@@ -285,14 +285,14 @@ class ScxfTaskRunner(SeleniumTaskRunner):
             return
 
         self._log_info('打开首页检测学习情况')
-        self.driver.get(SCXF_HOME_URL)
+        self._driver_get(SCXF_HOME_URL)
         time.sleep(3)
         self._dismiss_popups()
 
         if not self._is_logged_in():
             self._log_warning('首页检测未登录，重新登录')
             self._ensure_logged_in(max_rounds=5)
-            self.driver.get(SCXF_HOME_URL)
+            self._driver_get(SCXF_HOME_URL)
             time.sleep(3)
             self._dismiss_popups()
 
@@ -340,7 +340,7 @@ class ScxfTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.common.by import By
 
         self._log_info('打开日常学法')
-        self.driver.get(SCXF_COURSES_YEAR)
+        self._driver_get(SCXF_COURSES_YEAR)
         time.sleep(3)
 
         study_links = self.driver.find_elements(By.LINK_TEXT, '进入学习')
@@ -354,10 +354,10 @@ class ScxfTaskRunner(SeleniumTaskRunner):
             time.sleep(3)
             if self._start_course_chapter():
                 return
-            self.driver.get(SCXF_COURSES_YEAR)
+            self._driver_get(SCXF_COURSES_YEAR)
             time.sleep(2)
 
-        self.driver.get(SCXF_COURSES_ALL)
+        self._driver_get(SCXF_COURSES_ALL)
         time.sleep(3)
         for link_text in ('继续学习', '开始学习', '进入学习'):
             for study_link in self.driver.find_elements(By.LINK_TEXT, link_text):

@@ -29,6 +29,10 @@ DEFAULT_PAGE_ERROR_KEYWORDS = [
     '502',
 ]
 
+# ChromeDriver 超时/假死时，driver.get 统一重试
+DRIVER_GET_RETRY = 3
+DRIVER_GET_RETRY_INTERVAL = 5
+
 
 class SeleniumTaskRunner(BaseTaskRunner):
     """基于 Selenium 的任务执行器基类。"""
@@ -71,6 +75,49 @@ class SeleniumTaskRunner(BaseTaskRunner):
             '[%s][taskId=%s][%s] ' + msg,
             self.log_tag, self.log_task_id, self.log_user_label, *args,
         )
+
+    def _driver_get(self, url: str, *, retries: int = DRIVER_GET_RETRY, label: str = '页面') -> None:
+        """打开 URL，对 ChromeDriver 超时/假死做有限次重试（各站点共用）。"""
+        last_exc: Exception | None = None
+        for attempt in range(1, retries + 1):
+            if self._stopped or not self.driver:
+                return
+            try:
+                self._log_info('打开%s attempt=%s/%s url=%s', label, attempt, retries, url)
+                self.driver.get(url)
+                return
+            except Exception as exc:
+                last_exc = exc
+                err_name = type(exc).__name__
+                err_msg = str(exc).split('\n', 1)[0].strip()
+                if len(err_msg) > 200:
+                    err_msg = err_msg[:200] + '...'
+                retryable = self._is_driver_get_retryable(exc)
+                self._log_warning(
+                    '打开%s失败 attempt=%s/%s retryable=%s err=%s: %s',
+                    label, attempt, retries, retryable, err_name, err_msg,
+                )
+                if not retryable or attempt >= retries:
+                    break
+                try:
+                    self.driver.execute_script('window.stop();')
+                except Exception:
+                    pass
+                time.sleep(DRIVER_GET_RETRY_INTERVAL)
+
+        if last_exc is not None:
+            raise last_exc
+
+    @staticmethod
+    def _is_driver_get_retryable(exc: Exception) -> bool:
+        name = type(exc).__name__.lower()
+        msg = str(exc).lower()
+        keywords = (
+            'timeout', 'timed out', 'readtimeout', 'connection',
+            'disconnected', 'chrome not reachable', 'invalid session',
+            'session deleted', 'no such window', 'browsing context',
+        )
+        return any(k in name or k in msg for k in keywords)
 
     def _browser_user_data_dir(self) -> str:
         return os.path.join(

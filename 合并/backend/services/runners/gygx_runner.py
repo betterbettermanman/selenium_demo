@@ -61,7 +61,7 @@ class GygxTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
 
-        self.driver.get(GYGX_HOME_URL)
+        self._driver_get(GYGX_HOME_URL)
         time.sleep(2)
         self._dismiss_notice_dialog()
 
@@ -168,7 +168,7 @@ class GygxTaskRunner(SeleniumTaskRunner):
         self._log_info('进入个人中心并打开课包 planId=%s', plan_id)
 
         # 同 tab 内跳转，sessionStorage 保持
-        self.driver.get(GYGX_MY_URL)
+        self._driver_get(GYGX_MY_URL)
         time.sleep(2)
         if not self._is_logged_in():
             raise RuntimeError('进入个人中心时登录态丢失')

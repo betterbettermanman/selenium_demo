@@ -47,7 +47,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support.wait import WebDriverWait
 
         self._init_browser()
-        self.driver.get(SCGB_HOME_URL)
+        self._driver_get(SCGB_HOME_URL)
 
         try:
             notice = WebDriverWait(self.driver, 2).until(
@@ -388,12 +388,12 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         if 'web.scgb.gov.cn' in current or current.startswith('about:'):
             self._log_info('hash 路由先离开当前页再进入，避免不刷新')
             try:
-                self.driver.get('about:blank')
+                self._driver_get('about:blank')
                 time.sleep(0.5)
             except Exception:
-                self.driver.get(SCGB_HOME_URL)
+                self._driver_get(SCGB_HOME_URL)
                 time.sleep(1)
-        self.driver.get(url)
+        self._driver_get(url)
         time.sleep(settle_seconds)
         # 再 refresh 一次，确保播放页真正重新挂载
         try:

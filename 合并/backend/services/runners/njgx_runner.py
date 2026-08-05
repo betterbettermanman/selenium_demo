@@ -89,7 +89,7 @@ class NjgxTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
 
-        self.driver.get(self._build_login_url())
+        self._driver_get(self._build_login_url())
         time.sleep(2)
 
         try:
@@ -157,7 +157,7 @@ class NjgxTaskRunner(SeleniumTaskRunner):
 
         # self.driver.switch_to.default_content()
         self._log_info('打开课程页: %s', self.current_course_url)
-        self.driver.get(self.current_course_url)
+        self._driver_get(self.current_course_url)
         time.sleep(5)
 
         if self._find_and_play_first_unfinished():

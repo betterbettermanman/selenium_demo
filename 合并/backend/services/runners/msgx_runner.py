@@ -67,7 +67,7 @@ class MsgxTaskRunner(SeleniumTaskRunner):
         for idx in range(max_rounds):
             self._auto_login()
             time.sleep(3)
-            self.driver.get(CHINAHRT_USER_SET)
+            self._driver_get(CHINAHRT_USER_SET)
             time.sleep(2)
             if self._is_logged_in():
                 self._sync_user_profile()
@@ -89,7 +89,7 @@ class MsgxTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
 
-        self.driver.get(MSGX_LOGIN_URL)
+        self._driver_get(MSGX_LOGIN_URL)
         time.sleep(3)
 
         try:
@@ -143,7 +143,7 @@ class MsgxTaskRunner(SeleniumTaskRunner):
             return 'complete'
 
         self._log_info('打开培训计划列表')
-        self.driver.get(CHINAHRT_TRAIN_LIST)
+        self._driver_get(CHINAHRT_TRAIN_LIST)
         time.sleep(5)
 
         parents = WebDriverWait(self.driver, 10).until(

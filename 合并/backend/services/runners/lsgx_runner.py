@@ -85,7 +85,7 @@ class LsgxTaskRunner(SeleniumTaskRunner):
     def _login(self, max_rounds=5):
         try:
             self._log_info('打开首页检查登录态 %s', LSGX_HOME_URL)
-            self.driver.get(LSGX_HOME_URL)
+            self._driver_get(LSGX_HOME_URL)
             time.sleep(3)
         except Exception:
             self._log_warning('打开网站失败')
@@ -116,7 +116,7 @@ class LsgxTaskRunner(SeleniumTaskRunner):
         from selenium.webdriver.support.wait import WebDriverWait
         try:
             self._log_info('打开首页准备登录 %s', LSGX_HOME_URL)
-            self.driver.get(LSGX_HOME_URL)
+            self._driver_get(LSGX_HOME_URL)
             time.sleep(5)
 
             # 再次确认：若已登录则不再点登录
@@ -172,7 +172,7 @@ class LsgxTaskRunner(SeleniumTaskRunner):
             return
 
         self._log_info('打开课程页: %s', self.current_course_url)
-        self.driver.get(self.current_course_url)
+        self._driver_get(self.current_course_url)
         time.sleep(5)
 
         if self.find_and_play_first_unfinished():
