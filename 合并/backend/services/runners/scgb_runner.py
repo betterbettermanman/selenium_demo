@@ -336,15 +336,35 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                         self._last_watch_times = watched
                         self._watch_times_stale_rounds = 0
                         self._stale_reload_count = 0
-                    self._log_info(
-                        '课程 %s 播放中 total=%s watched=%s stale=%s 下次检测间隔=%ss',
-                        self.current_course_id,
-                        detail['totalPeriod'],
-                        detail['watchTimes'],
-                        self._watch_times_stale_rounds,
-                        sleep_time,
-                    )
                     ended = self._ensure_video_playing()
+                    video_info = self._read_video_progress()
+                    if video_info:
+                        cur = float(video_info.get('currentTime') or 0)
+                        dur = float(video_info.get('duration') or 0)
+                        pct = (cur / dur * 100) if dur > 0 else 0.0
+                        self._log_info(
+                            '课程 %s 视频进度 %.1f%% (%s/%s) paused=%s ended=%s '
+                            'api_watched=%s/%s stale=%s 下次检测=%ss',
+                            self.current_course_id,
+                            pct,
+                            self._format_seconds(cur),
+                            self._format_seconds(dur) if dur > 0 else '?',
+                            video_info.get('paused'),
+                            video_info.get('ended'),
+                            detail['watchTimes'],
+                            detail['totalPeriod'],
+                            self._watch_times_stale_rounds,
+                            sleep_time,
+                        )
+                    else:
+                        self._log_info(
+                            '课程 %s 播放中（未读到 video） api_watched=%s/%s stale=%s 下次检测=%ss',
+                            self.current_course_id,
+                            detail['watchTimes'],
+                            detail['totalPeriod'],
+                            self._watch_times_stale_rounds,
+                            sleep_time,
+                        )
                     if ended:
                         sleep_time = min(sleep_time, 30)
                     elif self._watch_times_stale_rounds > 0:
@@ -715,42 +735,63 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                 return True
         return False
 
+    def _read_video_progress(self) -> dict | None:
+        """读取播放器进度（#videoPlayer_html5_api / video.vjs-tech）。"""
+        try:
+            info = self.driver.execute_script(
+                """
+                const v = document.querySelector(
+                    'video#videoPlayer_html5_api, video.vjs-tech, video'
+                );
+                if (!v) return null;
+                return {
+                    currentTime: v.currentTime || 0,
+                    duration: v.duration || 0,
+                    paused: !!v.paused,
+                    ended: !!v.ended
+                };
+                """
+            )
+            if not isinstance(info, dict):
+                return None
+            return info
+        except Exception as exc:
+            if self._is_session_dead_error(exc):
+                raise
+            return None
+
+    @staticmethod
+    def _format_seconds(seconds: float) -> str:
+        total = max(int(seconds), 0)
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            return f'{h:02d}:{m:02d}:{s:02d}'
+        return f'{m:02d}:{s:02d}'
+
     def _ensure_video_playing(self) -> bool:
         """保证播放；若 video 已 ended 返回 True（调用方应加快切课检测）。"""
-        from selenium.webdriver.common.by import By
-
         try:
-            videos = self.driver.find_elements(By.TAG_NAME, 'video')
-            if videos:
-                info = self.driver.execute_script(
-                    """
-                    var v = arguments[0];
-                    try { v.muted = false; } catch (e) {}
-                    return {
-                        paused: !!v.paused,
-                        ended: !!v.ended,
-                        currentTime: v.currentTime || 0
-                    };
-                    """,
-                    videos[0],
-                )
+            info = self._read_video_progress()
+            if info:
                 if info.get('ended'):
                     self._log_info('当前视频元素已 ended，等待接口确认完成并切课')
                     return True
-                if not info.get('paused') and info.get('currentTime', 0) > 0:
+                if not info.get('paused') and float(info.get('currentTime') or 0) > 0:
                     return False
-                # 暂停/未开播：优先 JS play，再点大播放按钮
-                try:
-                    self.driver.execute_script(
-                        """
-                        var v = arguments[0];
-                        var p = v.play();
-                        if (p && typeof p.catch === 'function') p.catch(function(){});
-                        """,
-                        videos[0],
-                    )
-                except Exception:
-                    pass
+                # 暂停/未开播：优先 JS play
+                self.driver.execute_script(
+                    """
+                    const v = document.querySelector(
+                        'video#videoPlayer_html5_api, video.vjs-tech, video'
+                    );
+                    if (!v) return;
+                    try { v.muted = false; } catch (e) {}
+                    const p = v.play();
+                    if (p && typeof p.catch === 'function') p.catch(function(){});
+                    """
+                )
+                return False
         except Exception as exc:
             if self._is_session_dead_error(exc):
                 raise
