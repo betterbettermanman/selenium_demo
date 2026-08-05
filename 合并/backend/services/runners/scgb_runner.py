@@ -35,9 +35,16 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         self._stale_reload_count = 0
         self._auth_expired = False
         self._auth_fail_rounds = 0
+        self._api_network_error = False
         self.api_headers = {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': '*/*',
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/120.0.0.0 Safari/537.36'
+            ),
+            'Accept': 'application/json, text/plain, */*',
+            'Origin': 'https://web.scgb.gov.cn',
+            'Referer': 'https://web.scgb.gov.cn/',
         }
 
     def prepare_login(self):
@@ -303,12 +310,17 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                     self._handle_login_expired()
                     break
                 if not detail:
-                    self._auth_fail_rounds += 1
-                    self._sync_api_headers()
-                    if self._auth_fail_rounds >= 3 and not self._ensure_login_valid():
-                        self._handle_login_expired()
-                        break
-                    sleep_time = 15
+                    # SSL/网络抖动不要按登录失效累计，避免误停任务
+                    if self._api_network_error:
+                        self._log_warning('课程详情接口网络异常，稍后重试')
+                        sleep_time = 20
+                    else:
+                        self._auth_fail_rounds += 1
+                        self._sync_api_headers()
+                        if self._auth_fail_rounds >= 3 and not self._ensure_login_valid():
+                            self._handle_login_expired()
+                            break
+                        sleep_time = 15
                 elif detail['totalPeriod'] <= detail['watchTimes']:
                     self._auth_fail_rounds = 0
                     self._log_info('课程 %s 已观看完成，立即续播下一门', self.current_course_id)
@@ -596,6 +608,35 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                 self._log_warning('处理课程列表项失败: %s', exc)
         return True
 
+    def _api_request(self, method: str, url: str, *, max_retries: int = 5, timeout: int = 20, **kwargs):
+        """
+        带退避重试的 API 请求。
+        api.scgb.gov.cn 偶发 SSL EOF / 连接重置，单次失败不应直接放弃。
+        """
+        last_exc = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                return requests.request(
+                    method,
+                    url,
+                    headers=self.api_headers,
+                    timeout=timeout,
+                    **kwargs,
+                )
+            except (
+                requests.exceptions.SSLError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+            ) as exc:
+                last_exc = exc
+                wait = min(2 ** (attempt - 1), 16)
+                self._log_warning(
+                    'API 网络异常(%s/%s) %s: %s，%ss 后重试',
+                    attempt, max_retries, url, exc, wait,
+                )
+                time.sleep(wait)
+        raise last_exc
+
     def _check_study_time(self) -> bool:
         """检查班级必修/选修学时是否完成，并设置 is_must。"""
         if not self.task.class_id:
@@ -603,7 +644,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
 
         url = f'{SCGB_API_BASE}/class/app/getClassDetailByUserId?classId={self.task.class_id}'
         try:
-            response = requests.get(url=url, headers=self.api_headers, timeout=10)
+            response = self._api_request('GET', url)
             response.raise_for_status()
             result = response.json().get('result', {})
             required_hours = round(int(result.get('requiredPeriod', 0)) / 3600, 2)
@@ -632,12 +673,13 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         url = f'{SCGB_API_BASE}/course/app/getCourseDetailByUserId?'
         class_id = self.current_course_class_id or self.task.class_id or ''
         payload = {'courseId': course_id, 'classId': class_id}
+        self._api_network_error = False
         try:
-            response = requests.post(url, headers=self.api_headers, json=payload, timeout=10)
+            response = self._api_request('POST', url, json=payload)
             if response.status_code == 401:
                 self._log_warning('课程详情接口 401，尝试从页面刷新 token')
                 self._sync_api_headers()
-                response = requests.post(url, headers=self.api_headers, json=payload, timeout=10)
+                response = self._api_request('POST', url, json=payload, max_retries=3)
                 if response.status_code == 401:
                     self._log_warning('刷新 token 后仍 401，判定登录已过期')
                     self._auth_expired = True
@@ -647,6 +689,14 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             if result is not None:
                 self._auth_expired = False
             return result
+        except (
+            requests.exceptions.SSLError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+        ):
+            self._api_network_error = True
+            self._log_exception('查询课程详情网络失败 course_id=%s', course_id)
+            return None
         except Exception:
             self._log_exception('查询课程详情失败 course_id=%s', course_id)
             return None
