@@ -15,6 +15,7 @@ class Task(db.Model):
     is_charged = db.Column(db.String(8), nullable=False, default='0', comment='是否收费（1：收费，0：不收费）')
     price = db.Column(db.Integer, nullable=True, default=None, comment='价格')
     status = db.Column(db.String(8), default='1', comment='状态（1：未完成，2：完成）')
+    progress = db.Column(db.String(64), default='', comment='学习进度（按网站不同：学时或完成数/总数）')
     no_play_videos = db.Column(db.JSON, comment='不播放列表')
     remark = db.Column(db.String(100), comment='备注')
     class_id = db.Column(db.String(256), comment='课程id')
@@ -35,6 +36,7 @@ class Task(db.Model):
             'is_charged': self.is_charged,
             'price': int(self.price) if self.price is not None else None,
             'status': self.status,
+            'progress': self.progress or '',
             'no_play_videos': self.no_play_videos,
             'remark': self.remark,
             'class_id': self.class_id,

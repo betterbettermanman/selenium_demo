@@ -79,6 +79,10 @@
                 </span>
               </div>
               <div class="info-row">
+                <span class="info-label">进度</span>
+                <span class="info-value">{{ record.progress || '-' }}</span>
+              </div>
+              <div class="info-row">
                 <span class="info-label">模式</span>
                 <span class="info-value">{{ record.is_head === '1' ? '无头' : '有头' }}</span>
               </div>

@@ -171,6 +171,22 @@ class SeleniumTaskRunner(BaseTaskRunner):
         if not self._stopped and update_task_fields(self.task, status='2'):
             self._log_info('任务 id=%s 已标记完成', self.task.id)
 
+    def _update_task_progress(self, progress: str) -> bool:
+        """回写任务进度字段；值未变化时跳过，避免频繁写库。"""
+        text = (progress or '').strip()
+        if not text:
+            return False
+        if (getattr(self.task, 'progress', None) or '') == text:
+            return True
+        if self._stopped:
+            return False
+        ok = update_task_fields(self.task, progress=text)
+        if ok:
+            self._log_info('任务进度已更新 progress=%s', text)
+        else:
+            self._log_warning('任务进度更新失败 progress=%s', text)
+        return ok
+
     def check_page_error(self, extra_keywords: list[str] | None = None) -> bool:
         try:
             page_source = (self.driver.page_source or '').lower()

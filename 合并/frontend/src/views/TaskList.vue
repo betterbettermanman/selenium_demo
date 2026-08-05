@@ -51,6 +51,9 @@
             <div class="stacked-cell__secondary">{{ record.organ_name || '-' }}</div>
           </div>
         </template>
+        <template v-if="column.key === 'progress'">
+          {{ record.progress || '-' }}
+        </template>
         <template v-if="column.key === 'status'">
           <a-space>
             <a-tag :color="record.status === '2' ? 'green' : 'orange'">
@@ -267,6 +270,7 @@ const columns = [
   { title: '无头模式', key: 'is_head', width: 90 },
   { title: '是否收费', key: 'is_charged', width: 90 },
   { title: '价格', key: 'price', width: 90 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
   { title: '状态', key: 'status', width: 170 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },

@@ -193,7 +193,7 @@ def export_tasks():
 
     headers = [
         'ID', '网站名称', '课程名称', '姓名', '单位名称', '账号', '密码',
-        '无头模式', '是否收费', '价格', '状态', '备注', '创建时间', '完成时间', '更新时间',
+        '无头模式', '是否收费', '价格', '进度', '状态', '备注', '创建时间', '完成时间', '更新时间',
     ]
     wb = Workbook()
     ws = wb.active
@@ -215,6 +215,7 @@ def export_tasks():
             '无头' if row.get('is_head') == '1' else '有头',
             '是' if row.get('is_charged') == '1' else '否',
             row.get('price') if row.get('price') is not None else '',
+            row.get('progress') or '',
             '完成' if row.get('status') == '2' else '未完成',
             row.get('remark', ''),
             row.get('create_time', ''),

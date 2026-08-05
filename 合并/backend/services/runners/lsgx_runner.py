@@ -183,6 +183,7 @@ class LsgxTaskRunner(SeleniumTaskRunner):
         self._mark_course_complete()
 
     def find_and_play_first_unfinished(self) -> bool:
+        """找第一个未学完小节并打开；全部已学完则返回 False。"""
         from selenium.webdriver.common.by import By
 
         try:
@@ -191,25 +192,37 @@ class LsgxTaskRunner(SeleniumTaskRunner):
                 self._log_warning('未找到课程列表 ml-list')
                 return True
 
+            total = len(ml_lists)
+            done = 0
+            play_href = None
             for item in ml_lists:
-                a_tag = item.find_element(By.CLASS_NAME, 'begin')
-                href = a_tag.get_attribute('href')
+                try:
+                    href = item.find_element(By.CLASS_NAME, 'begin').get_attribute('href')
+                except Exception:
+                    continue
                 if not href:
                     continue
 
-                flish_text = ''
                 try:
-                    flish_element = item.find_element(By.CLASS_NAME, 'flish')
-                    flish_text = (flish_element.text or '').strip()
+                    status = (item.find_element(By.CLASS_NAME, 'flish').text or '').strip()
                 except Exception:
-                    self._log_info('列表项无 flish 标记，尝试直接打开: %s', href)
-                    self._open_video_tab(href)
-                    return True
+                    status = ''
 
-                self._log_info('课程状态: %s', flish_text)
-                if flish_text != '已学完':
-                    self._open_video_tab(href)
-                    return True
+                if status == '已学完':
+                    done += 1
+                    continue
+                if play_href is None:
+                    play_href = href
+
+            self._update_task_progress(f'{done}/{total}')
+            self._log_info('课表进度 已完成=%s/%s', done, total)
+
+            if play_href:
+                self._log_info('打开未完成小节: %s', play_href)
+                self._open_video_tab(play_href)
+                return True
+
+            self._log_info('列表小节已全部学完')
             return False
         except Exception:
             self._log_exception('查找未完成课程失败')

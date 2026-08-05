@@ -554,6 +554,8 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
 
     def _hours_reached(self, hours: tuple[float, float] | None = None) -> bool:
         current, target = hours if hours is not None else self._read_training_hours()
+        display_target = target if target and target > 0 else float(CREDIT_TARGET)
+        self._update_task_progress(f'{current:.2f}/{display_target:.0f}')
         reached = current >= CREDIT_TARGET or (target > 0 and current >= target)
         self._log_info('学时检测 current=%s target=%s credit_target=%s reached=%s', current, target, CREDIT_TARGET, reached)
         return reached

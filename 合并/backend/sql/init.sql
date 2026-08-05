@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS `task` (
   `is_charged` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0' COMMENT '是否收费（1：收费，0：不收费）',
   `price` int DEFAULT NULL COMMENT '价格',
   `status` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '1' COMMENT '状态（1：未完成，2：完成）',
+  `progress` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '学习进度（按网站不同：学时或完成数/总数）',
   `no_play_videos` json DEFAULT NULL COMMENT '不播放列表',
   `remark` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
   `class_id` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '课程id',

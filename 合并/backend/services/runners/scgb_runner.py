@@ -224,6 +224,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         self._sync_api_headers()
         courses = self._parse_course_items(self.task.courses)
         if courses:
+            self._sync_courses_progress(courses)
             course = self._get_current_course(courses)
             if not course:
                 self._log_info('自定义课程已全部学完')
@@ -373,6 +374,18 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             if str(course.get('status', '0')) != '1':
                 return course
         return None
+
+    def _sync_courses_progress(self, courses=None):
+        """按任务课表统计：已完成数/总数，写入 progress。"""
+        items = courses if courses is not None else self._parse_course_items(self.task.courses)
+        if not items:
+            return
+        total = len(items)
+        done = sum(
+            1 for c in items
+            if isinstance(c, dict) and str(c.get('status', '0')) == '1'
+        )
+        self._update_task_progress(f'{done}/{total}')
 
     def _goto_scgb_url(self, url: str, settle_seconds: float = 2):
         """打开 SCGB 的 hash 路由页。
@@ -759,6 +772,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
             updated.append(course)
         if changed:
             update_task_fields(self.task, courses=updated)
+            self._sync_courses_progress(updated)
 
     def _sync_api_headers(self):
         store = self._get_local_storage('store')
