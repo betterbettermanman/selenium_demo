@@ -26,31 +26,39 @@ def register_runner(website_code):
     return decorator
 
 
+def _thread_alive(task_id) -> bool:
+    thread = _running_threads.get(task_id)
+    return thread is not None and thread.is_alive()
+
+
+def _runner_active(runner) -> bool:
+    if runner is None or getattr(runner, '_stopped', False):
+        return False
+    return runner.phase in (RunnerPhase.WAITING_SMS, RunnerPhase.RUNNING)
+
+
 def is_task_running(task_id):
+    """前端展示用：仅当 runner 仍处于等待短信/执行中。
+
+    手动停止后会立刻摘掉 runner，因此这里返回 False；
+    但旧线程可能尚未退出，启动前请再看 has_live_task_thread。
+    """
     with _lock:
-        thread = _running_threads.get(task_id)
-        if thread is not None and thread.is_alive():
-            return True
-        runner = _running_runners.get(task_id)
-        return runner is not None and runner.phase in (
-            RunnerPhase.WAITING_SMS, RunnerPhase.RUNNING
-        )
+        return _runner_active(_running_runners.get(task_id))
+
+
+def has_live_task_thread(task_id) -> bool:
+    """任务工作线程是否仍存活（含正在停止、尚未 finally 清理）。"""
+    with _lock:
+        return _thread_alive(task_id)
 
 
 def get_running_task_count() -> int:
-    """当前运行中（含等待短信）的任务数。"""
+    """当前运行中（含等待短信）的任务数；已停止但仍在收尾的线程不占槽。"""
     with _lock:
-        task_ids = set(_running_threads.keys()) | set(_running_runners.keys())
         count = 0
-        for task_id in task_ids:
-            thread = _running_threads.get(task_id)
-            if thread is not None and thread.is_alive():
-                count += 1
-                continue
-            runner = _running_runners.get(task_id)
-            if runner is not None and runner.phase in (
-                RunnerPhase.WAITING_SMS, RunnerPhase.RUNNING
-            ):
+        for task_id, runner in _running_runners.items():
+            if _runner_active(runner):
                 count += 1
         return count
 
@@ -210,10 +218,17 @@ def update_task_fields(task, **fields):
         return False
 
 
-def _remove_runner(task_id):
+def _remove_runner(task_id, runner=None, thread=None):
+    """从注册表移除任务。
+
+    传入 runner/thread 时仅移除「仍是自己」的条目，避免旧线程 finally
+    把后来新启动的同 task_id 注册清掉。
+    """
     with _lock:
-        _running_runners.pop(task_id, None)
-        _running_threads.pop(task_id, None)
+        if runner is None or _running_runners.get(task_id) is runner:
+            _running_runners.pop(task_id, None)
+        if thread is None or _running_threads.get(task_id) is thread:
+            _running_threads.pop(task_id, None)
 
 
 def _start_main_thread(task_id, runner, app):
@@ -230,7 +245,7 @@ def _start_main_thread(task_id, runner, app):
                 runner._set_phase(RunnerPhase.FAILED)
                 logger.exception('任务 %s [%s] 执行失败', task_id, user_label)
             finally:
-                _remove_runner(task_id)
+                _remove_runner(task_id, runner=runner, thread=threading.current_thread())
                 if not runner._stopped:
                     try:
                         runner._cleanup()
@@ -257,8 +272,11 @@ def start_task(task_id, app, *, source: str = 'manual'):
     from models.task import Task
     from models.website import Website
 
-    if is_task_running(task_id):
-        return False, {'message': '任务正在执行中'}
+    with _lock:
+        if _thread_alive(task_id):
+            return False, {'message': '任务正在停止中，请稍后再启动'}
+        if _runner_active(_running_runners.get(task_id)):
+            return False, {'message': '任务正在执行中'}
 
     task = Task.query.get(task_id)
     if not task:
@@ -284,6 +302,9 @@ def start_task(task_id, app, *, source: str = 'manual'):
     runner.bind_app(app)
 
     with _lock:
+        # 二次确认，避免检查与注册之间被并发启动插入
+        if _thread_alive(task_id) or _runner_active(_running_runners.get(task_id)):
+            return False, {'message': '任务正在执行中'}
         _running_runners[task_id] = runner
 
     need_sms_flow = website.enable_sms_code == '1'
@@ -294,7 +315,7 @@ def start_task(task_id, app, *, source: str = 'manual'):
                 login_result = runner.prepare_login()
         except Exception as exc:
             logger.exception('任务 %s [%s] 登录准备失败', task_id, runner.log_user_label)
-            _remove_runner(task_id)
+            _remove_runner(task_id, runner=runner)
             try:
                 runner._cleanup()
             except Exception:
@@ -315,7 +336,7 @@ def start_task(task_id, app, *, source: str = 'manual'):
                 'task_id': task_id,
             }
         if login_result == 'failed':
-            _remove_runner(task_id)
+            _remove_runner(task_id, runner=runner)
             try:
                 runner._cleanup()
             except Exception:
@@ -323,7 +344,7 @@ def start_task(task_id, app, *, source: str = 'manual'):
             return False, {'message': login_msg or '登录失败，请检查账号密码'}
 
         if login_result != 'ready':
-            _remove_runner(task_id)
+            _remove_runner(task_id, runner=runner)
             try:
                 runner._cleanup()
             except Exception:
@@ -355,6 +376,10 @@ def submit_sms_code(task_id, code, app):
     if not ok:
         return False, msg or '验证码错误'
 
+    with _lock:
+        if _thread_alive(task_id):
+            return False, '任务主流程已在执行中'
+
     _start_main_thread(task_id, runner, app)
     return True, msg or '验证成功，任务继续执行'
 
@@ -362,8 +387,12 @@ def submit_sms_code(task_id, code, app):
 def stop_task(task_id, app):
     with _lock:
         runner = _running_runners.get(task_id)
+        thread = _running_threads.get(task_id)
 
-    if not runner or not is_task_running(task_id):
+    if not runner or not _runner_active(runner):
+        # 兼容：runner 已摘掉但线程还在收尾
+        if thread is not None and thread.is_alive():
+            return False, '任务正在停止中'
         return False, '任务未在运行'
 
     logger.info('用户手动停止任务 %s [%s]', task_id, runner.log_user_label)
@@ -372,7 +401,11 @@ def stop_task(task_id, app):
     except Exception:
         logger.exception('停止任务 %s [%s] 时关闭浏览器失败', task_id, runner.log_user_label)
 
-    _remove_runner(task_id)
+    # 立刻摘掉 runner，前端不再显示「执行中」；保留 thread 直到 finally，
+    # 防止旧线程未退出时再次 start，以及旧 finally 误清新任务注册。
+    with _lock:
+        if _running_runners.get(task_id) is runner:
+            _running_runners.pop(task_id, None)
 
     with app.app_context():
         update_task_fields(runner.task, status='1')

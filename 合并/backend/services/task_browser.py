@@ -4,7 +4,7 @@ import os
 import threading
 import time
 
-from services.task_runner import is_task_running
+from services.task_runner import has_live_task_thread, is_task_running
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def open_task_browser(task, website) -> tuple[bool, str]:
         return False, '网站 URL 须以 http:// 或 https:// 开头'
     if not task.website_code:
         return False, '任务未关联网站'
-    if is_task_running(task.id):
+    if is_task_running(task.id) or has_live_task_thread(task.id):
         return False, '任务正在执行中，请先关闭任务再打开预览浏览器（避免占用同一用户目录）'
 
     task_id = task.id
