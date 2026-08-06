@@ -214,6 +214,7 @@
             size="large"
             :disabled="!form.website_id"
             :loading="courseLoading"
+            @change="handleCourseChange"
           >
             <a-select-option
               v-for="item in courseOptions"
@@ -382,6 +383,7 @@ const {
   handleSelectUserAccount,
   onNickNameInput,
   handleWebsiteChange,
+  handleCourseChange,
   handleSearch,
   openModal,
   handleSubmit,

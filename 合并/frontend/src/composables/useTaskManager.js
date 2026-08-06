@@ -61,10 +61,11 @@ export function useTaskManager() {
     websiteOptions.value = res.data.list || []
   }
 
-  const fetchCoursesByWebsite = async (websiteId, keepCourseId = undefined) => {
+  const fetchCoursesByWebsite = async (websiteId, keepCourseId = undefined, { syncPrice = true } = {}) => {
     if (!websiteId) {
       courseOptions.value = []
       form.course_id = undefined
+      if (syncPrice) form.price = undefined
       return
     }
     courseLoading.value = true
@@ -79,9 +80,25 @@ export function useTaskManager() {
         // 新增或切换网站：默认选中第一门课程
         form.course_id = courseOptions.value[0]?.id
       }
+      if (syncPrice) {
+        applyCoursePrice(form.course_id)
+      }
     } finally {
       courseLoading.value = false
     }
+  }
+
+  const applyCoursePrice = (courseId) => {
+    const course = courseOptions.value.find((item) => item.id === courseId)
+    if (!course) {
+      form.price = undefined
+      return
+    }
+    form.price = course.price != null && course.price !== '' ? Number(course.price) : undefined
+  }
+
+  const handleCourseChange = (courseId) => {
+    applyCoursePrice(courseId)
   }
 
   const handleWebsiteChange = (websiteId) => {
@@ -194,7 +211,7 @@ export function useTaskManager() {
       form.schedule_type = record.schedule_type || 'manual'
       form.remark = record.remark || ''
       if (form.website_id) {
-        await fetchCoursesByWebsite(form.website_id, record.course_id || undefined)
+        await fetchCoursesByWebsite(form.website_id, record.course_id || undefined, { syncPrice: false })
       }
     }
     modalVisible.value = true
@@ -434,6 +451,7 @@ export function useTaskManager() {
     fetchWebsites,
     fetchCoursesByWebsite,
     handleWebsiteChange,
+    handleCourseChange,
     fetchList,
     handleSearch,
     handleExport,
