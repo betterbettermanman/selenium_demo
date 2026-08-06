@@ -298,10 +298,10 @@ export function useTaskManager() {
       return
     }
     openingBrowserId.value = record.id
-    const hideLoading = message.loading('正在打开浏览器...', 0)
+    const hideLoading = message.loading('正在打开页面...', 0)
     try {
       const res = await taskApi.openBrowser(record.id)
-      message.success(res.message || '浏览器已打开')
+      message.success(res.message || '页面已打开')
     } finally {
       hideLoading()
       openingBrowserId.value = null

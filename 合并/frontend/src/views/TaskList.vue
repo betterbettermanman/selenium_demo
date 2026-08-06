@@ -56,9 +56,6 @@
       @change="handleTableChange"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'completed_time'">
-          {{ record.completed_time || '-' }}
-        </template>
         <template v-if="column.key === 'website_course'">
           <div class="stacked-cell">
             <div class="stacked-cell__primary">{{ record.website_name || '-' }}</div>
@@ -69,6 +66,12 @@
           <div class="stacked-cell">
             <div class="stacked-cell__primary">{{ record.nick_name || '-' }}</div>
             <div class="stacked-cell__secondary">{{ record.organ_name || '-' }}</div>
+          </div>
+        </template>
+        <template v-if="column.key === 'time_info'">
+          <div class="stacked-cell">
+            <div class="stacked-cell__primary">{{ record.create_time || '-' }}</div>
+            <div class="stacked-cell__secondary">{{ record.completed_time || '-' }}</div>
           </div>
         </template>
         <template v-if="column.key === 'progress'">
@@ -119,7 +122,7 @@
               :disabled="record.is_running"
               @click="handleOpenBrowser(record)"
             >
-              打开浏览器
+              打开页面
             </a-button>
             <a-popconfirm
               title="确定关闭该任务吗？将关闭对应浏览器并停止执行。"
@@ -359,20 +362,19 @@ import { useUserAccountSuggest } from '../composables/useUserAccountSuggest'
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70, fixed: 'left' },
-  { title: '网站/课程', key: 'website_course', width: 200, ellipsis: true },
+  { title: '网站/课程', key: 'website_course', width: 140, ellipsis: true },
   { title: '姓名/单位', key: 'user_info', width: 120, ellipsis: true },
   { title: '账号', dataIndex: 'username', key: 'username', width: 120 },
   { title: '密码', dataIndex: 'password', key: 'password', width: 120, ellipsis: true },
   { title: '模式', key: 'is_head', width: 70 },
   { title: '收费', key: 'is_charged', width: 70 },
-  { title: '价格', key: 'price', width: 90 },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
-  { title: '调度', key: 'schedule_type', width: 80 },
-  { title: '状态', key: 'status', width: 170 },
+  { title: '价格', key: 'price', width: 70 },
+  { title: '进度', dataIndex: 'progress', key: 'progress', width: 90 },
+  { title: '调度', key: 'schedule_type', width: 70 },
+  { title: '状态', key: 'status', width: 160 },
+  { title: '创建时间/完成时间', key: 'time_info', width: 170, ellipsis: true },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
-  { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
-  { title: '完成时间', dataIndex: 'completed_time', key: 'completed_time', width: 170 },
-  { title: '操作', key: 'action', width: 340, fixed: 'right' },
+  { title: '操作', key: 'action', width: 300, fixed: 'right' },
 ]
 
 const loading = ref(false)
@@ -696,10 +698,10 @@ const handleOpenBrowser = async (record) => {
     return
   }
   openingBrowserId.value = record.id
-  const hideLoading = message.loading('正在打开浏览器...', 0)
+  const hideLoading = message.loading('正在打开页面...', 0)
   try {
     const res = await taskApi.openBrowser(record.id)
-    message.success(res.message || '浏览器已打开')
+    message.success(res.message || '页面已打开')
   } finally {
     hideLoading()
     openingBrowserId.value = null

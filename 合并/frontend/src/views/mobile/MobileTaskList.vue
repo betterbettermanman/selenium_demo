@@ -134,7 +134,7 @@
               :disabled="record.is_running"
               @click="handleOpenBrowser(record)"
             >
-              打开浏览器
+              打开页面
             </a-button>
             <a-button
               size="small"

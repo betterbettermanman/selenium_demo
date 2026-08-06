@@ -61,7 +61,7 @@ def open_task_browser(task, website) -> tuple[bool, str]:
         msg = _navigate(driver, url)
     except Exception as exc:
         logger.exception('打开任务浏览器失败 task_id=%s', task_id)
-        return False, f'打开浏览器失败: {exc}'
+        return False, f'打开页面失败: {exc}'
 
     with _lock:
         _browsers[task_id] = driver
@@ -123,10 +123,10 @@ def _navigate(driver, url: str) -> str:
     try:
         driver.get(url)
         logger.info('任务预览跳转完成 %.1fms url=%s', (time.perf_counter() - t0) * 1000, url)
-        return f'已打开有头浏览器: {url}'
+        return f'页面已打开: {url}'
     except TimeoutException:
         logger.warning('任务预览页面加载超时（已打开窗口）url=%s', url)
-        return f'浏览器已打开，页面仍在加载: {url}'
+        return f'页面已打开，仍在加载: {url}'
 
 
 def _watch_browser(task_id: int, driver):
