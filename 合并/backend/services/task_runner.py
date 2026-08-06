@@ -242,6 +242,7 @@ def _start_main_thread(task_id, runner, app):
                     notify_slot_freed(
                         app,
                         schedule_type=getattr(runner.task, 'schedule_type', None),
+                        exclude_task_id=task_id,
                     )
                 except Exception:
                     logger.exception('任务 %s 结束后触发调度补扫失败', task_id)
@@ -381,6 +382,7 @@ def stop_task(task_id, app):
         notify_slot_freed(
             app,
             schedule_type=getattr(runner.task, 'schedule_type', None),
+            exclude_task_id=task_id,
         )
     except Exception:
         logger.exception('停止任务 %s 后触发调度补扫失败', task_id)

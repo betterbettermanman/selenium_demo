@@ -9,6 +9,11 @@
 两步流程：
 1) 打开 class_id 课程详情列表页（coursedatail），点击 .course-list-cell 未学小节，进入视频播放页
 2) 在播放页使用 #chapter 播放列表检测进度（重新学习/100% = 完成），播完切下一节
+
+完成条件：
+- 课程「特定课表」配置 {"sum": 16}（创建任务时写入 task.courses）
+- 进度 = 页面已学列表数量 / sum；仅当已学 >= sum 才标记任务完成
+- 当前课程列表学完但未达 sum：只结束本次执行，定时任务可续跑
 """
 from __future__ import annotations
 
@@ -40,11 +45,12 @@ LIST_PAGE_WAIT_SECONDS = 15
 
 @register_runner('SCZH')
 class SczhTaskRunner(SeleniumTaskRunner):
-    """四川智慧中小学平台：登录 + 列表进播放页 + 播放列表进度检测。"""
+    """四川智慧中小学平台：登录 + 列表进播放页 + 按 sum 目标回写进度。"""
 
     def __init__(self, task, website):
         super().__init__(task, website)
         self.course_url = ''
+        self.sum_target = 0
         self.current_subsection_title = ''
         self._on_play_page = False
         self._sleep_time = 10
@@ -60,7 +66,7 @@ class SczhTaskRunner(SeleniumTaskRunner):
             self._init_browser(window_size=(1920, 1080))
             self._ensure_logged_in(max_rounds=5)
             self._open_course()
-            if not self.is_complete:
+            if not self.is_complete and self.is_running:
                 self._start_monitor_thread(self._check_course_success)
                 self._wait_until_complete()
             self._sync_task_status()
@@ -75,7 +81,52 @@ class SczhTaskRunner(SeleniumTaskRunner):
         self.course_url = (self.task.class_id or '').strip()
         if not self.course_url.startswith('http'):
             raise RuntimeError('SCZH 任务缺少 class_id（课程详情页 URL）')
-        self._log_info('课程页=%s', self.course_url)
+        self.sum_target = self._parse_sum_target()
+        self._log_info('课程页=%s sum目标=%s', self.course_url, self.sum_target)
+
+    def _parse_sum_target(self) -> int:
+        """从课程/任务特定课表读取 sum，示例：{"sum": 16}"""
+        for item in self._parse_course_items(self.task.courses):
+            if not isinstance(item, dict) or item.get('sum') is None:
+                continue
+            try:
+                value = int(item.get('sum'))
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError('SCZH 课程配置 sum 须为整数，示例: {"sum": 16}') from exc
+            if value <= 0:
+                raise RuntimeError('SCZH 课程配置 sum 须为正整数')
+            return value
+        raise RuntimeError('SCZH 课程配置缺少 sum，请在特定课表填写 {"sum": 16}')
+
+    def _apply_learned_progress(self, learned: int) -> bool:
+        """回写进度 learned/sum；返回是否已达总目标（应标记任务完成）。"""
+        learned = max(0, int(learned or 0))
+        self._update_task_progress(f'{learned}/{self.sum_target}')
+        self._log_info('任务进度 %s/%s', learned, self.sum_target)
+        return learned >= self.sum_target
+
+    def _finish_session(self, reason: str):
+        """当前课暂无可学内容但未达 sum：结束本次执行，不标记任务完成。"""
+        self._log_info(
+            '%s，结束本次执行（未达 sum=%s，定时可续跑）',
+            reason, self.sum_target,
+        )
+        self.is_running = False
+
+    def _handle_learned_count(self, learned: int, *, exhausted: bool = False) -> bool:
+        """
+        根据已学数量更新进度。
+        返回 True 表示应停止继续点课（已完成或结束本次）。
+        exhausted=True 表示当前课程列表已无未学项。
+        """
+        if self._apply_learned_progress(learned):
+            self._log_info('已达 sum 目标，标记任务完成')
+            self._mark_course_complete()
+            return True
+        if exhausted:
+            self._finish_session('当前课程列表已学完')
+            return True
+        return False
 
     # ------------------------------------------------------------------ login
     def _is_logged_in(self) -> bool:
@@ -212,16 +263,12 @@ class SczhTaskRunner(SeleniumTaskRunner):
             return False
 
         learned = sum(1 for item in items if item['done'])
-        self._update_task_progress(f'{learned}/{len(items)}')
-        self._log_info('列表页进度 %s/%s', learned, len(items))
-
-        if learned >= len(items):
-            self._log_info('列表页全部已学习，标记完成')
-            self._mark_course_complete()
+        self._log_info('列表页已学 %s / 本课 %s（目标 sum=%s）', learned, len(items), self.sum_target)
+        if self._handle_learned_count(learned, exhausted=(learned >= len(items))):
             return False
 
         for item in items:
-            if self._stopped or self.is_complete:
+            if self._stopped or self.is_complete or not self.is_running:
                 return False
             if item['done']:
                 continue
@@ -315,14 +362,12 @@ class SczhTaskRunner(SeleniumTaskRunner):
             return False
 
         learned = sum(1 for item in items if item['done'])
-        self._update_task_progress(f'{learned}/{len(items)}')
-        if learned >= len(items):
-            self._log_info('播放列表全部完成，标记任务完成')
-            self._mark_course_complete()
+        self._log_info('播放列表已学 %s / 本页 %s（目标 sum=%s）', learned, len(items), self.sum_target)
+        if self._handle_learned_count(learned, exhausted=(learned >= len(items))):
             return False
 
         for index, item in enumerate(items, 1):
-            if self._stopped or self.is_complete:
+            if self._stopped or self.is_complete or not self.is_running:
                 return False
             if item['done']:
                 continue
@@ -337,7 +382,7 @@ class SczhTaskRunner(SeleniumTaskRunner):
             time.sleep(3)
             self._play_video_element()
             self.current_subsection_title = item['title']
-            self._update_task_progress(f'{learned}/{len(items)}')
+            self._apply_learned_progress(learned)
             return True
         return False
 
@@ -387,7 +432,7 @@ class SczhTaskRunner(SeleniumTaskRunner):
 
     # --------------------------------------------------------------- main flow
     def _open_course(self):
-        if self.is_complete or self._stopped:
+        if self.is_complete or self._stopped or not self.is_running:
             return
 
         self._on_play_page = False
@@ -406,12 +451,12 @@ class SczhTaskRunner(SeleniumTaskRunner):
             self._on_play_page = True
             self._log_info('当前已在播放页，直接使用播放列表')
             if not self._click_playlist_unfinished():
-                if not self.is_complete:
+                if not self.is_complete and self.is_running:
                     self._log_warning('播放列表无可播小节')
             return
 
         if not self._enter_play_from_list():
-            if not self.is_complete:
+            if not self.is_complete and self.is_running:
                 self._log_warning('未能从列表页进入播放页，稍后重试')
 
     def _spawn_open_course(self):
@@ -448,32 +493,45 @@ class SczhTaskRunner(SeleniumTaskRunner):
                     self._on_play_page = True
                     self._play_video_element()
 
-                    learned, total, current_percent, current_title = self._read_play_progress()
-                    if total > 0:
-                        self._update_task_progress(f'{learned}/{total}')
+                    learned, page_total, current_percent, current_title = self._read_play_progress()
+                    if page_total > 0:
+                        self._apply_learned_progress(learned)
                         self._log_info(
-                            '播放列表进度 %s/%s 当前=%s %s%%',
-                            learned, total, current_title or '-', current_percent,
+                            '播放列表已学 %s/%s（目标 sum=%s）当前=%s %s%%',
+                            learned, page_total, self.sum_target,
+                            current_title or '-', current_percent,
                         )
 
-                    if total > 0 and learned >= total:
-                        self._log_info('全部小节进度已完成，标记任务完成')
+                    if page_total > 0 and learned >= self.sum_target:
+                        self._log_info('已达 sum 目标，标记任务完成')
                         self._mark_course_complete()
+                        return
+
+                    if page_total > 0 and learned >= page_total:
+                        # 本课播放列表学完，但未达 sum：结束本次，不标完成
+                        self._handle_learned_count(learned, exhausted=True)
                         return
 
                     if current_title and current_percent >= 100:
                         self._log_info('当前小节已完成，切换下一节: %s', current_title)
                         self.current_subsection_title = ''
                         if not self._click_playlist_unfinished():
+                            if not self.is_running or self.is_complete:
+                                return
                             self._spawn_open_course()
                         sleep_time = 15
-                    elif total > 0 and learned < total and not current_title:
+                    elif page_total > 0 and learned < page_total and not current_title:
                         self._log_info('播放页无当前小节，点下一未完成项')
                         if not self._click_playlist_unfinished():
+                            if not self.is_running or self.is_complete:
+                                return
                             self._spawn_open_course()
                         sleep_time = 15
                     else:
                         sleep_time = random.randint(60, 120)
+
+                if not self.is_running or self.is_complete:
+                    return
 
                 if not self._is_logged_in():
                     self._log_warning('登录失效，重新登录')
@@ -482,6 +540,8 @@ class SczhTaskRunner(SeleniumTaskRunner):
                     sleep_time = 20
             except Exception as exc:
                 self._log_error('检测进度失败: %s', exc)
+                if not self.is_running or self.is_complete:
+                    return
                 if not self._is_logged_in():
                     try:
                         self._ensure_logged_in(max_rounds=3)

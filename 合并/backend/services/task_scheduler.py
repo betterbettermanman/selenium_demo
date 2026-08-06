@@ -19,6 +19,9 @@ _APP = None
 _slot_fill_lock = threading.Lock()
 _slot_fill_scheduled = False
 _slot_fill_pending_types: set[str] = set()
+# 本轮已跑完（含「当前课学完/日上限」等）的任务：槽位补扫不再拉起，等下次完整扫描（到点/立即执行）
+_skip_until_full_scan: set[int] = set()
+_skip_lock = threading.Lock()
 
 
 def normalize_schedule_type(value) -> str:
@@ -28,10 +31,10 @@ def normalize_schedule_type(value) -> str:
     return text
 
 
-def notify_slot_freed(app=None, schedule_type=None):
+def notify_slot_freed(app=None, schedule_type=None, exclude_task_id=None):
     """
     定时任务结束/停止释放并发槽后调用。
-    仅补扫「同一调度类型」，避免执行每月时把每日任务也拉起。
+    仅补扫「同一调度类型」，且不重复拉起刚结束的任务。
     """
     global _slot_fill_scheduled
 
@@ -42,6 +45,19 @@ def notify_slot_freed(app=None, schedule_type=None):
     flask_app = app or _APP
     if flask_app is None:
         return
+
+    if exclude_task_id is not None:
+        try:
+            tid = int(exclude_task_id)
+        except (TypeError, ValueError):
+            tid = None
+        if tid is not None:
+            with _skip_lock:
+                _skip_until_full_scan.add(tid)
+            logger.info(
+                '任务 %s 本轮已结束，下次完整扫描（到点/立即执行）前不再补拉',
+                tid,
+            )
 
     with _slot_fill_lock:
         _slot_fill_pending_types.add(st)
@@ -60,7 +76,9 @@ def notify_slot_freed(app=None, schedule_type=None):
                     _slot_fill_pending_types.clear()
                 for item_type in types:
                     try:
-                        summary = run_schedule_scan(item_type, app=flask_app)
+                        summary = run_schedule_scan(
+                            item_type, app=flask_app, from_slot_fill=True
+                        )
                         started = int(summary.get('started') or 0)
                         if started:
                             logger.info(
@@ -89,8 +107,12 @@ def notify_slot_freed(app=None, schedule_type=None):
     ).start()
 
 
-def run_schedule_scan(schedule_type: str, app=None) -> dict:
-    """扫描并启动一类定时任务，返回摘要。"""
+def run_schedule_scan(schedule_type: str, app=None, *, from_slot_fill: bool = False) -> dict:
+    """扫描并启动一类定时任务，返回摘要。
+
+    from_slot_fill=True：槽位补扫，跳过本轮已结束的任务，避免「学完当即又被拉起」。
+    from_slot_fill=False：到点/立即执行完整扫描，清除对应跳过标记后重新纳入。
+    """
     from models.task import Task
 
     schedule_type = normalize_schedule_type(schedule_type)
@@ -134,8 +156,29 @@ def run_schedule_scan(schedule_type: str, app=None) -> dict:
         )
         candidate_ids = [t.id for t in candidates]
 
-    idle_ids = [tid for tid in candidate_ids if not is_task_running(tid)]
-    skipped_running = len(candidate_ids) - len(idle_ids)
+    if not from_slot_fill:
+        # 完整扫描：允许再次拉起本周期已「本轮结束」的任务（例如换课后）
+        with _skip_lock:
+            cleared = _skip_until_full_scan.intersection(candidate_ids)
+            if cleared:
+                _skip_until_full_scan.difference_update(cleared)
+                logger.info(
+                    '完整扫描清除本轮跳过 type=%s count=%s ids=%s',
+                    schedule_type, len(cleared), sorted(cleared)[:20],
+                )
+        skip_ids: set[int] = set()
+    else:
+        with _skip_lock:
+            skip_ids = set(_skip_until_full_scan)
+
+    idle_ids = [
+        tid for tid in candidate_ids
+        if not is_task_running(tid) and tid not in skip_ids
+    ]
+    skipped_running = len(candidate_ids) - len(
+        [tid for tid in candidate_ids if not is_task_running(tid)]
+    )
+    skipped_session = len([tid for tid in candidate_ids if tid in skip_ids and not is_task_running(tid)])
 
     summary = {
         'ok': True,
@@ -146,6 +189,8 @@ def run_schedule_scan(schedule_type: str, app=None) -> dict:
         'slots': slots,
         'candidates': len(candidate_ids),
         'skipped_running': skipped_running,
+        'skipped_session': skipped_session,
+        'from_slot_fill': from_slot_fill,
         'attempted': 0,
         'started': 0,
         'failed': 0,
@@ -156,8 +201,19 @@ def run_schedule_scan(schedule_type: str, app=None) -> dict:
     if slots <= 0:
         summary['message'] = f'已达并发上限 {max_running}，本轮不启动'
         logger.info(
-            '调度扫描 type=%s running=%s/%s slots=0 candidates=%s',
-            schedule_type, running, max_running, len(candidate_ids),
+            '调度扫描 type=%s running=%s/%s slots=0 candidates=%s fill=%s',
+            schedule_type, running, max_running, len(candidate_ids), from_slot_fill,
+        )
+        return summary
+
+    if not idle_ids:
+        summary['message'] = (
+            f'无待启动任务（候选 {len(candidate_ids)}，'
+            f'运行中跳过 {skipped_running}，本轮已结束跳过 {skipped_session}）'
+        )
+        logger.info(
+            '调度扫描 type=%s %s fill=%s',
+            schedule_type, summary['message'], from_slot_fill,
         )
         return summary
 
@@ -180,7 +236,8 @@ def run_schedule_scan(schedule_type: str, app=None) -> dict:
 
     summary['message'] = (
         f'扫描完成：候选 {summary["candidates"]}，尝试 {summary["attempted"]}，'
-        f'成功 {summary["started"]}，失败 {summary["failed"]}'
+        f'成功 {summary["started"]}，失败 {summary["failed"]}，'
+        f'本轮已结束跳过 {skipped_session}'
     )
     return summary
 

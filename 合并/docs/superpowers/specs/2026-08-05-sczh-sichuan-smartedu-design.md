@@ -45,7 +45,8 @@
 | `website_code` | `SCZH` |
 | `class_id` | 课程详情页完整 URL，须含 `courseId`，例如 `https://basic.sc.smartedu.cn/hd/teacherTraining/coursedatail?courseId=xxxx` |
 | `username` / `password` | 平台账号密码 |
-| `courses` | 本期不使用 |
+| `courses` | 配置总目标：`{"sum": 16}`（创建任务时写入 task.courses） |
+| 完成条件 | 页面已学列表数 >= sum 才 `status=2`；当前课学完但未达 sum 只结束本次执行 |
 
 缺少合法 `class_id`（非 http 开头）时任务启动即失败。
 
