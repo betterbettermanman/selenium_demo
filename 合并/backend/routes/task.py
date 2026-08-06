@@ -268,6 +268,7 @@ def create_task():
     password = (data.get('password') or '').strip()
     remark = data.get('remark')
     nick_name = (data.get('nick_name') or '').strip()
+    organ_name = (data.get('organ_name') or '').strip() or None
     is_charged = _parse_is_charged(data.get('is_charged', '0'))
     price = _parse_price(data.get('price'))
     if price is False:
@@ -289,6 +290,7 @@ def create_task():
 
     item = Task(
         nick_name=nick_name,
+        organ_name=organ_name,
         username=username,
         password=password,
         remark=remark,
@@ -307,7 +309,7 @@ def create_task():
         username=username,
         password=password,
         nick_name=nick_name,
-        organ_name=data.get('organ_name'),
+        organ_name=organ_name,
     )
     db.session.commit()
     return {'code': 200, 'data': _enrich_task_dict(item), 'message': '创建成功'}

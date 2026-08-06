@@ -146,108 +146,139 @@
     <a-modal
       v-model:open="modalVisible"
       :title="editingId ? '编辑任务' : '新增任务'"
-      width="520px"
+      width="720px"
       @ok="handleSubmit"
       :confirm-loading="submitting"
     >
-      <a-form :model="form" layout="vertical">
-        <a-form-item label="网站名称" required>
-          <a-select
-            v-model:value="form.website_id"
-            placeholder="请先选择网站"
-            show-search
-            option-filter-prop="label"
-            @change="handleWebsiteChange"
-          >
-            <a-select-option
-              v-for="item in websiteOptions"
-              :key="item.id"
-              :value="item.id"
-              :label="item.name"
-            >
-              {{ item.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="课程名称" required>
-          <a-select
-            v-model:value="form.course_id"
-            placeholder="请选择课程"
-            show-search
-            option-filter-prop="label"
-            :disabled="!form.website_id"
-            :loading="courseLoading"
-          >
-            <a-select-option
-              v-for="item in courseOptions"
-              :key="item.id"
-              :value="item.id"
-              :label="item.name"
-            >
-              {{ item.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="姓名">
-          <a-input
-            v-model:value="form.nick_name"
-            placeholder="请先选网站，再输入姓名可匹配已有用户"
-            :disabled="!form.website_id"
-            allow-clear
-            @update:value="onNickNameInput"
-          />
-          <div v-if="userSuggestLoading" class="user-suggest-tip">正在匹配用户…</div>
-          <div v-else-if="userSuggestOptions.length" class="user-suggest">
-            <div class="user-suggest__tip">匹配到已有用户，点击填入账号密码</div>
-            <button
-              v-for="opt in userSuggestOptions"
-              :key="opt.value"
-              type="button"
-              class="user-suggest__item"
-              @click="handleSelectUserAccount(opt.value, opt)"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-        </a-form-item>
-        <a-form-item label="账号" required>
-          <a-input v-model:value="form.username" placeholder="请输入账号" />
-        </a-form-item>
-        <a-form-item label="密码" required>
-          <a-input v-model:value="form.password" placeholder="请输入密码" />
-        </a-form-item>
-        <a-form-item label="是否收费">
-          <a-select v-model:value="form.is_charged">
-            <a-select-option value="0">否</a-select-option>
-            <a-select-option value="1">是</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="价格">
-          <a-input-number
-            v-model:value="form.price"
-            :min="0"
-            :precision="0"
-            :step="1"
-            style="width: 100%"
-            placeholder="请输入价格（可选）"
-          />
-        </a-form-item>
-        <a-form-item label="浏览器无头模式">
-          <a-select v-model:value="form.is_head">
-            <a-select-option value="1">无头模式</a-select-option>
-            <a-select-option value="0">有头模式</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="调度方式">
-          <a-select v-model:value="form.schedule_type">
-            <a-select-option value="manual">手动（可点启动）</a-select-option>
-            <a-select-option value="daily">每日（仅定时）</a-select-option>
-            <a-select-option value="monthly">每月（仅定时）</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="备注">
-          <a-input v-model:value="form.remark" placeholder="请输入备注" />
-        </a-form-item>
+      <a-form :model="form" layout="vertical" class="task-form">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="网站名称" required>
+              <a-select
+                v-model:value="form.website_id"
+                placeholder="请先选择网站"
+                show-search
+                option-filter-prop="label"
+                @change="handleWebsiteChange"
+              >
+                <a-select-option
+                  v-for="item in websiteOptions"
+                  :key="item.id"
+                  :value="item.id"
+                  :label="item.name"
+                >
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="课程名称" required>
+              <a-select
+                v-model:value="form.course_id"
+                placeholder="请选择课程"
+                show-search
+                option-filter-prop="label"
+                :disabled="!form.website_id"
+                :loading="courseLoading"
+              >
+                <a-select-option
+                  v-for="item in courseOptions"
+                  :key="item.id"
+                  :value="item.id"
+                  :label="item.name"
+                >
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="姓名">
+              <a-input
+                v-model:value="form.nick_name"
+                placeholder="请先选网站，再输入姓名可匹配已有用户"
+                :disabled="!form.website_id"
+                allow-clear
+                @update:value="onNickNameInput"
+              />
+              <div v-if="userSuggestLoading" class="user-suggest-tip">正在匹配用户…</div>
+              <div v-else-if="userSuggestOptions.length" class="user-suggest">
+                <div class="user-suggest__tip">匹配到已有用户，点击填入账号密码</div>
+                <button
+                  v-for="opt in userSuggestOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="user-suggest__item"
+                  @click="handleSelectUserAccount(opt.value, opt)"
+                >
+                  {{ opt.label }}
+                </button>
+              </div>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="单位">
+              <a-input
+                v-model:value="form.organ_name"
+                placeholder="请输入单位名称（可选）"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="账号" required>
+              <a-input v-model:value="form.username" placeholder="请输入账号" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="密码" required>
+              <a-input v-model:value="form.password" placeholder="请输入密码" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="收费">
+              <a-select v-model:value="form.is_charged">
+                <a-select-option value="0">否</a-select-option>
+                <a-select-option value="1">是</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="价格">
+              <a-input-number
+                v-model:value="form.price"
+                :min="0"
+                :precision="0"
+                :step="1"
+                style="width: 100%"
+                placeholder="请输入价格（可选）"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="模式">
+              <a-select v-model:value="form.is_head">
+                <a-select-option value="1">无头</a-select-option>
+                <a-select-option value="0">有头</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="调度方式">
+              <a-select v-model:value="form.schedule_type">
+                <a-select-option value="manual">手动（可点启动）</a-select-option>
+                <a-select-option value="daily">每日（仅定时）</a-select-option>
+                <a-select-option value="monthly">每月（仅定时）</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注">
+              <a-input v-model:value="form.remark" placeholder="请输入备注" />
+            </a-form-item>
+          </a-col>
+        </a-row>
       </a-form>
     </a-modal>
 
@@ -375,6 +406,7 @@ const form = reactive({
   website_id: undefined,
   course_id: undefined,
   nick_name: '',
+  organ_name: '',
   username: '',
   password: '',
   is_head: '1',
@@ -531,6 +563,7 @@ const resetForm = () => {
   form.website_id = undefined
   form.course_id = undefined
   form.nick_name = ''
+  form.organ_name = ''
   form.username = ''
   form.password = ''
   form.is_head = '1'
@@ -548,6 +581,7 @@ const openModal = async (record = null) => {
   if (record) {
     form.website_id = record.website_id || undefined
     form.nick_name = record.nick_name || ''
+    form.organ_name = record.organ_name || ''
     form.username = record.username || ''
     form.password = record.password || ''
     form.is_head = record.is_head || '1'
@@ -590,6 +624,7 @@ const handleSubmit = async () => {
       website_id: form.website_id,
       course_id: form.course_id,
       nick_name: form.nick_name.trim(),
+      organ_name: form.organ_name.trim(),
       username: form.username,
       password: form.password,
       is_head: form.is_head,
@@ -858,6 +893,10 @@ onMounted(() => {
 
 .user-suggest__item:last-child {
   border-bottom: 0;
+}
+
+.task-form :deep(.ant-form-item) {
+  margin-bottom: 12px;
 }
 
 .user-suggest__item:hover {

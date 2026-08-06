@@ -29,6 +29,7 @@ export function useTaskManager() {
     website_id: undefined,
     course_id: undefined,
     nick_name: '',
+    organ_name: '',
     username: '',
     password: '',
     is_head: '1',
@@ -166,6 +167,7 @@ export function useTaskManager() {
     form.website_id = undefined
     form.course_id = undefined
     form.nick_name = ''
+    form.organ_name = ''
     form.username = ''
     form.password = ''
     form.is_head = '1'
@@ -183,6 +185,7 @@ export function useTaskManager() {
     if (record) {
       form.website_id = record.website_id || undefined
       form.nick_name = record.nick_name || ''
+      form.organ_name = record.organ_name || ''
       form.username = record.username || ''
       form.password = record.password || ''
       form.is_head = record.is_head || '1'
@@ -225,6 +228,7 @@ export function useTaskManager() {
         website_id: form.website_id,
         course_id: form.course_id,
         nick_name: form.nick_name.trim(),
+        organ_name: form.organ_name.trim(),
         username: form.username,
         password: form.password,
         is_head: form.is_head,

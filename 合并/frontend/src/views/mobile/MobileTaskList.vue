@@ -248,6 +248,14 @@
             </button>
           </div>
         </a-form-item>
+        <a-form-item label="单位">
+          <a-input
+            v-model:value="form.organ_name"
+            placeholder="单位名称（可选）"
+            size="large"
+            allow-clear
+          />
+        </a-form-item>
         <a-form-item label="账号" required>
           <a-input v-model:value="form.username" placeholder="请输入账号" size="large" />
         </a-form-item>

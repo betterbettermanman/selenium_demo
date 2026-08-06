@@ -68,6 +68,7 @@ export function useUserAccountSuggest(form) {
     const user = option?.user
     if (!user) return
     form.nick_name = user.nick_name || ''
+    form.organ_name = user.organ_name || ''
     form.username = user.username || ''
     form.password = user.password || ''
     clearUserSuggest()
