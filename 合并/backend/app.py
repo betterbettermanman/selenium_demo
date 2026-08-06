@@ -10,6 +10,7 @@ from routes.website import website_bp
 from routes.course import course_bp
 from routes.task import task_bp
 from routes.user_account import user_account_bp
+from routes.scheduler import scheduler_bp
 from utils.logging_setup import setup_logging
 from utils.perf_log import setup_perf_logging
 import services.runners  # noqa: F401  注册任务执行器
@@ -30,10 +31,33 @@ def create_app():
     app.register_blueprint(course_bp)
     app.register_blueprint(task_bp)
     app.register_blueprint(user_account_bp)
+    app.register_blueprint(scheduler_bp)
     _register_health_route(app)
     _register_frontend_routes(app)
 
     return app
+
+
+def _ensure_task_schedule_type_column():
+    """兼容已有库：无 schedule_type 列时自动补充。"""
+    try:
+        exists = db.session.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'task' AND COLUMN_NAME = 'schedule_type'"
+        )).scalar()
+        if not exists:
+            db.session.execute(text(
+                "ALTER TABLE `task` "
+                "ADD COLUMN `schedule_type` VARCHAR(16) NOT NULL DEFAULT 'manual' "
+                "COMMENT '调度类型（manual：手动，daily：每日，monthly：每月）' "
+                "AFTER `status`"
+            ))
+            db.session.commit()
+            logging.info('已自动添加 task.schedule_type 字段')
+    except Exception as exc:
+        db.session.rollback()
+        logging.warning('检查/添加 schedule_type 失败: %s', exc)
 
 
 def _warmup_db():
@@ -81,9 +105,16 @@ app = create_app()
 with app.app_context():
     try:
         db.create_all()
+        _ensure_task_schedule_type_column()
         _warmup_db()
     except Exception as exc:
         logging.warning('应用初始化数据库失败: %s', exc)
+
+try:
+    from services.task_scheduler import init_scheduler
+    init_scheduler(app)
+except Exception as exc:
+    logging.warning('调度器初始化失败: %s', exc)
 
 
 if __name__ == '__main__':

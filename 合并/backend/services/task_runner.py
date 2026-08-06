@@ -37,6 +37,24 @@ def is_task_running(task_id):
         )
 
 
+def get_running_task_count() -> int:
+    """当前运行中（含等待短信）的任务数。"""
+    with _lock:
+        task_ids = set(_running_threads.keys()) | set(_running_runners.keys())
+        count = 0
+        for task_id in task_ids:
+            thread = _running_threads.get(task_id)
+            if thread is not None and thread.is_alive():
+                count += 1
+                continue
+            runner = _running_runners.get(task_id)
+            if runner is not None and runner.phase in (
+                RunnerPhase.WAITING_SMS, RunnerPhase.RUNNING
+            ):
+                count += 1
+        return count
+
+
 def get_runner(task_id):
     with _lock:
         return _running_runners.get(task_id)
@@ -218,6 +236,15 @@ def _start_main_thread(task_id, runner, app):
                         runner._cleanup()
                     except Exception:
                         logger.exception('任务 %s [%s] 清理失败', task_id, user_label)
+                # 释放并发槽后，仅补扫同调度类型（月任务结束不会拉起日任务）
+                try:
+                    from services.task_scheduler import notify_slot_freed
+                    notify_slot_freed(
+                        app,
+                        schedule_type=getattr(runner.task, 'schedule_type', None),
+                    )
+                except Exception:
+                    logger.exception('任务 %s 结束后触发调度补扫失败', task_id)
 
     thread = threading.Thread(target=_target, daemon=True, name=f'task-{task_id}')
     with _lock:
@@ -225,7 +252,7 @@ def _start_main_thread(task_id, runner, app):
     thread.start()
 
 
-def start_task(task_id, app):
+def start_task(task_id, app, *, source: str = 'manual'):
     from models.task import Task
     from models.website import Website
 
@@ -235,6 +262,14 @@ def start_task(task_id, app):
     task = Task.query.get(task_id)
     if not task:
         return False, {'message': '任务不存在'}
+
+    schedule_type = (getattr(task, 'schedule_type', None) or 'manual').strip().lower()
+    if source == 'manual' and schedule_type in ('daily', 'monthly'):
+        return False, {
+            'message': '该任务为定时调度（每日/每月），不能手动启动，请使用「立即执行定时扫描」',
+        }
+    if source == 'scheduler' and schedule_type == 'manual':
+        return False, {'message': '手动任务不会被定时扫描启动'}
 
     if not task.website_code:
         return False, {'message': '任务未关联网站，无法启动'}
@@ -340,6 +375,15 @@ def stop_task(task_id, app):
 
     with app.app_context():
         update_task_fields(runner.task, status='1')
+
+    try:
+        from services.task_scheduler import notify_slot_freed
+        notify_slot_freed(
+            app,
+            schedule_type=getattr(runner.task, 'schedule_type', None),
+        )
+    except Exception:
+        logger.exception('停止任务 %s 后触发调度补扫失败', task_id)
 
     return True, '任务已关闭'
 

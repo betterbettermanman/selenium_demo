@@ -11,7 +11,6 @@ import random
 import re
 import threading
 import time
-from datetime import datetime, timedelta
 
 from services.runners.selenium_runner import SeleniumTaskRunner
 from services.task_runner import register_runner, update_task_fields
@@ -21,7 +20,6 @@ SCXF_LOGIN_URL = 'https://www.scxfks.com/study/login'
 SCXF_COURSES_YEAR = 'https://www.scxfks.com/study/courses/year'
 SCXF_COURSES_ALL = 'https://www.scxfks.com/study/courses/all'
 SCXF_CREDIT_TARGET = 100
-SCXF_RESUME_HOUR = 8
 
 
 @register_runner('SCXF')
@@ -31,6 +29,8 @@ class ScxfTaskRunner(SeleniumTaskRunner):
     def __init__(self, task, website):
         super().__init__(task, website)
         self.current_course_id = ''
+        self._opening_home = False
+        self._opening_lock = threading.Lock()
 
     def run_main(self):
         self._log_info(
@@ -54,14 +54,26 @@ class ScxfTaskRunner(SeleniumTaskRunner):
 
     # ------------------------------------------------------------------ login
     def _is_logged_in(self) -> bool:
+        """
+        登录态判定（勿仅依赖首页 .userbox）：
+        - 明确在登录页 → 未登录
+        - 已在 /study/ 业务页（首页/课程/章节等）→ 视为已登录
+        - 否则再查 .userbox /「退出登录」
+        """
         from selenium.common import NoSuchElementException
         from selenium.webdriver.common.by import By
 
         try:
-            if '/study/login' in (self.driver.current_url or ''):
-                return False
+            url = self.driver.current_url or ''
         except Exception:
             return False
+
+        if '/study/login' in url:
+            return False
+
+        # 课程列表、章节页等通常没有首页 userbox，不能据此误判掉线
+        if 'scxfks.com/study/' in url and '/study/login' not in url:
+            return True
 
         try:
             self.driver.find_element(By.CLASS_NAME, 'userbox')
@@ -281,7 +293,7 @@ class ScxfTaskRunner(SeleniumTaskRunner):
             update_task_fields(self.task, **fields)
 
     def _open_home(self):
-        if self.is_complete or self._stopped:
+        if self.is_complete or self._stopped or not self.is_running:
             return
 
         self._log_info('打开首页检测学习情况')
@@ -300,6 +312,7 @@ class ScxfTaskRunner(SeleniumTaskRunner):
         self._sync_profile(user_info)
         credit_score = self._parse_score_value(user_info.get('学分累计', '0'))
         self._log_info('学分累计: %s / %s', credit_score, SCXF_CREDIT_TARGET)
+        self._update_task_progress(f'{credit_score:g}/{SCXF_CREDIT_TARGET}')
 
         if credit_score >= SCXF_CREDIT_TARGET:
             self._log_info('学分已达标，标记任务完成（暂不进测评）')
@@ -308,8 +321,37 @@ class ScxfTaskRunner(SeleniumTaskRunner):
 
         self._open_daily_study()
 
+    def _refresh_credit_progress(self) -> float | None:
+        """回首页读取学分并写到任务 progress，返回学分值。"""
+        try:
+            self._driver_get(SCXF_HOME_URL)
+            time.sleep(3)
+            self._dismiss_popups()
+            user_info = self._get_user_info()
+            self._sync_profile(user_info)
+            credit_score = self._parse_score_value(user_info.get('学分累计', '0'))
+            progress = f'{credit_score:g}/{SCXF_CREDIT_TARGET}'
+            self._update_task_progress(progress)
+            self._log_info('当前学分进度: %s', progress)
+            return credit_score
+        except Exception as exc:
+            self._log_warning('回写学分进度失败: %s', exc)
+            return None
+
+    def _finish_for_daily_limit(self):
+        """今日上限：回写学分、结束本次执行（不标记任务完成，便于次日/调度续跑）。"""
+        self._log_info('已到达今日上限，回写学分并结束本次执行')
+        credit_score = self._refresh_credit_progress()
+        if credit_score is not None and credit_score >= SCXF_CREDIT_TARGET:
+            self._log_info('学分已达标，标记任务完成（暂不进测评）')
+            self._mark_course_complete()
+            return
+        # 未达总目标：停跑并关浏览器，任务保持未完成 status=1
+        self.is_running = False
+
     def _start_course_chapter(self) -> bool:
         from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.wait import WebDriverWait
 
         if '/chapter/' in (self.driver.current_url or ''):
             self.current_course_id = self.driver.current_url.rsplit('/chapter/', 1)[-1]
@@ -319,21 +361,30 @@ class ScxfTaskRunner(SeleniumTaskRunner):
         chapters = self.driver.find_elements(By.XPATH, "//li[@chapter-type='0' and @class='c_item']")
 
         for index, li in enumerate(chapters, 1):
-            # 获取章节标题
             title_elem = li.find_element(By.XPATH, ".//a")
             title = title_elem.text.strip() if title_elem else f"章节{index}"
 
-            # 获取学分信息（如果没有学分，返回空字符串）
+            # 有学分标记的视为已学过，跳过；无学分标记则点击学习
             try:
-                # 查找包含"学分"的 div
-                credit_elem = li.find_element(By.XPATH, ".//div[contains(text(), '学分')]")
-                credit_text = credit_elem.text.strip()
-            except:
-                # 如果找不到学分元素，返回空字符串
-                credit_text = ""
-                li.click()
-                self._log_info('点击未学章节: %s', (title or '').strip()[:40])
-                return True
+                li.find_element(By.XPATH, ".//div[contains(text(), '学分')]")
+                continue
+            except Exception:
+                pass
+
+            li.click()
+            self._log_info('点击未学章节: %s', (title or '').strip()[:40])
+            try:
+                WebDriverWait(self.driver, 15).until(
+                    lambda d: '/chapter/' in (d.current_url or '')
+                )
+                self.current_course_id = self.driver.current_url.rsplit('/chapter/', 1)[-1]
+                self._log_info('已进入章节页: %s', self.current_course_id)
+            except Exception:
+                self._log_warning(
+                    '点击章节后未进入 /chapter/ 页，当前 url=%s',
+                    self.driver.current_url,
+                )
+            return True
         return False
 
     def _open_daily_study(self):
@@ -345,7 +396,7 @@ class ScxfTaskRunner(SeleniumTaskRunner):
 
         study_links = self.driver.find_elements(By.LINK_TEXT, '进入学习')
         for index in range(len(study_links)):
-            if self.is_complete or self._stopped:
+            if self.is_complete or self._stopped or not self.is_running:
                 return
             study_links = self.driver.find_elements(By.LINK_TEXT, '进入学习')
             if index >= len(study_links):
@@ -361,7 +412,7 @@ class ScxfTaskRunner(SeleniumTaskRunner):
         time.sleep(3)
         for link_text in ('继续学习', '开始学习', '进入学习'):
             for study_link in self.driver.find_elements(By.LINK_TEXT, link_text):
-                if self.is_complete or self._stopped:
+                if self.is_complete or self._stopped or not self.is_running:
                     return
                 study_link.click()
                 time.sleep(3)
@@ -372,41 +423,24 @@ class ScxfTaskRunner(SeleniumTaskRunner):
 
     def _spawn_open_home(self):
         """在子线程中打开首页；需带上 Flask app context，否则更新任务会报错。"""
+        with self._opening_lock:
+            if self._opening_home:
+                self._log_info('已有打开首页流程在执行，跳过')
+                return
+            self._opening_home = True
+
+        def _target():
+            try:
+                self._run_with_context(self._open_home)
+            finally:
+                with self._opening_lock:
+                    self._opening_home = False
+
         threading.Thread(
-            target=lambda: self._run_with_context(self._open_home),
+            target=_target,
             daemon=True,
             name=f'scxf-open-home-{self.task.id}',
         ).start()
-
-    def _seconds_until_next_morning(self, hour: int = SCXF_RESUME_HOUR) -> tuple[float, datetime]:
-        """计算距离下一个 hour:00 的秒数（若当前已过今日 hour 点，则等到明天）。"""
-        now = datetime.now()
-        target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
-        if now >= target:
-            target = target + timedelta(days=1)
-        return max((target - now).total_seconds(), 0), target
-
-    def _wait_until_next_morning_8(self) -> bool:
-        """
-        阻塞等到次日早上 8 点。分段 sleep，便于手动停止。
-        返回 True 表示等到点，False 表示中途被停止。
-        """
-        total_seconds, target = self._seconds_until_next_morning()
-        self._log_info(
-            '已到达今日上限，将阻塞等待至 %s（约 %.1f 小时）后继续学习',
-            target.strftime('%Y-%m-%d %H:%M:%S'),
-            total_seconds / 3600,
-        )
-        end_ts = time.time() + total_seconds
-        while time.time() < end_ts:
-            if self._stopped or not self.is_running or self.is_complete:
-                self._log_info('等待次日学习期间任务已停止')
-                return False
-            remain = end_ts - time.time()
-            # 每 60 秒醒一次，检查停止标记
-            time.sleep(min(60, max(remain, 0)))
-        self._log_info('已到次日早上 %s 点，重新开始学习', SCXF_RESUME_HOUR)
-        return True
 
     def _check_course_success(self):
         from selenium.common import NoSuchElementException
@@ -421,9 +455,8 @@ class ScxfTaskRunner(SeleniumTaskRunner):
                     try:
                         limit_div = self.driver.find_element(By.CSS_SELECTOR, 'div.limit')
                         if '已到达今日上限' in (limit_div.text or ''):
-                            if self._wait_until_next_morning_8():
-                                self._spawn_open_home()
-                            continue
+                            self._finish_for_daily_limit()
+                            return
                     except NoSuchElementException:
                         pass
 
@@ -440,17 +473,41 @@ class ScxfTaskRunner(SeleniumTaskRunner):
                     self._spawn_open_home()
                     sleep_time = 30
                 else:
-                    if not self._is_logged_in():
-                        self._log_warning('登录失效，重新登录')
+                    # 打开首页/选课线程正在跑时，勿抢 driver，也勿误判登录失效
+                    with self._opening_lock:
+                        opening = self._opening_home
+                    if opening:
+                        self._log_info('打开学习流程进行中，本轮跳过检测')
+                        sleep_time = 15
+                    elif not self._is_logged_in():
+                        self._log_warning(
+                            '登录失效，重新登录（url=%s）',
+                            (self.driver.current_url or '')[:120],
+                        )
                         self._ensure_logged_in(max_rounds=5)
-                    sleep_time = 30
+                        self._log_info('重新登录完成，重新打开学习')
+                        self._spawn_open_home()
+                        sleep_time = 30
+                    else:
+                        self._log_info(
+                            '当前不在章节页 url=%s，重新打开学习',
+                            (self.driver.current_url or '')[:120],
+                        )
+                        self._spawn_open_home()
+                        sleep_time = 30
             except Exception as exc:
                 self._log_error('检测学习状态失败: %s', exc)
-                if self._is_logged_in():
+                with self._opening_lock:
+                    opening = self._opening_home
+                if opening:
+                    sleep_time = 15
+                elif self._is_logged_in():
                     self._spawn_open_home()
+                    sleep_time = 20
                 else:
                     self._ensure_logged_in(max_rounds=5)
-                sleep_time = 20
+                    self._spawn_open_home()
+                    sleep_time = 20
 
             self._log_info('间隔 %s 秒继续检测', sleep_time)
             time.sleep(sleep_time)

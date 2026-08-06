@@ -82,6 +82,12 @@ export const taskApi = {
   export: (params) => request.get('/tasks/export', { params, responseType: 'blob' }),
 }
 
+export const schedulerApi = {
+  getConfig: () => request.get('/scheduler/config'),
+  updateConfig: (data) => request.put('/scheduler/config', data),
+  run: (type) => request.post('/scheduler/run', { type }, { timeout: 120000 }),
+}
+
 export const userAccountApi = {
   list: (params, config = {}) => request.get('/user-accounts', { params, ...config }),
   create: (data) => request.post('/user-accounts', data),

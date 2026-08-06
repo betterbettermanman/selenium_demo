@@ -21,6 +21,18 @@
           {{ item.label }}
         </button>
       </div>
+      <div class="status-tabs">
+        <button
+          v-for="item in scheduleTabs"
+          :key="String(item.value)"
+          type="button"
+          class="status-tab"
+          :class="{ 'status-tab--active': scheduleFilter === item.value }"
+          @click="setScheduleFilter(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
     </div>
 
     <a-spin :spinning="loading && pagination.current === 1">
@@ -110,7 +122,7 @@
               size="small"
               block
               :loading="startingTaskId === record.id"
-              :disabled="record.is_running && !record.waiting_sms"
+              :disabled="(record.is_running && !record.waiting_sms) || (record.schedule_type === 'daily' || record.schedule_type === 'monthly')"
               @click="handleStart(record)"
             >
               {{ record.waiting_sms ? '输入验证码' : '启动' }}
@@ -265,6 +277,13 @@
             <a-select-option value="0">有头模式</a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="调度方式">
+          <a-select v-model:value="form.schedule_type" size="large">
+            <a-select-option value="manual">手动</a-select-option>
+            <a-select-option value="daily">每日（仅定时）</a-select-option>
+            <a-select-option value="monthly">每月（仅定时）</a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item label="备注">
           <a-input v-model:value="form.remark" placeholder="可选" size="large" />
         </a-form-item>
@@ -323,6 +342,13 @@ const statusTabs = [
   { label: '完成', value: '2' },
 ]
 
+const scheduleTabs = [
+  { label: '全部调度', value: undefined },
+  { label: '手动', value: 'manual' },
+  { label: '每日', value: 'daily' },
+  { label: '每月', value: 'monthly' },
+]
+
 const {
   loading,
   submitting,
@@ -330,6 +356,7 @@ const {
   dataList,
   keyword,
   statusFilter,
+  scheduleFilter,
   editingId,
   websiteOptions,
   courseOptions,
@@ -369,6 +396,11 @@ const toggleExpand = (id) => {
 
 const setStatusFilter = (value) => {
   statusFilter.value = value
+  handleSearch()
+}
+
+const setScheduleFilter = (value) => {
+  scheduleFilter.value = value
   handleSearch()
 }
 

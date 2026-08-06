@@ -18,13 +18,14 @@ from services.task_runner import (
 )
 from services.task_runner import RunnerPhase
 from services.task_browser import close_task_browser, open_task_browser
+from services.task_scheduler import normalize_schedule_type
 from services.user_account_sync import sync_user_account_from_task
 from utils.perf_log import track_phase
 
 task_bp = Blueprint('task', __name__, url_prefix='/api/tasks')
 
 
-def _apply_task_filters(query, keyword='', status=''):
+def _apply_task_filters(query, keyword='', status='', schedule_type=''):
     if keyword:
         kw = f'%{keyword}%'
         query = query.filter(
@@ -40,10 +41,12 @@ def _apply_task_filters(query, keyword='', status=''):
         )
     if status:
         query = query.filter(Task.status == status)
+    if schedule_type:
+        query = query.filter(Task.schedule_type == schedule_type)
     return query
 
 
-def _build_joined_task_query(keyword='', status='', defer_courses=False):
+def _build_joined_task_query(keyword='', status='', schedule_type='', defer_courses=False):
     query = (
         db.session.query(Task, Website, Course)
         .select_from(Task)
@@ -59,7 +62,7 @@ def _build_joined_task_query(keyword='', status='', defer_courses=False):
             db.defer(Task.courses),
             db.defer(Course.courses),
         )
-    return _apply_task_filters(query, keyword, status).order_by(Task.id.desc())
+    return _apply_task_filters(query, keyword, status, schedule_type).order_by(Task.id.desc())
 
 
 def _compose_task_dict(
@@ -91,7 +94,7 @@ def _enrich_task_dict(task):
     return _compose_task_dict(task, website, course)
 
 
-def _build_task_query(keyword='', status=''):
+def _build_task_query(keyword='', status='', schedule_type=''):
     query = Task.query
     if keyword:
         kw = f'%{keyword}%'
@@ -113,6 +116,8 @@ def _build_task_query(keyword='', status=''):
         ).distinct()
     if status:
         query = query.filter(Task.status == status)
+    if schedule_type:
+        query = query.filter(Task.schedule_type == schedule_type)
     return query.order_by(Task.id.desc())
 
 
@@ -158,9 +163,13 @@ def list_tasks():
     page_size = request.args.get('page_size', 10, type=int)
     keyword = request.args.get('keyword', '', type=str).strip()
     status = request.args.get('status', '', type=str).strip()
+    schedule_raw = (request.args.get('schedule_type', '') or '').strip()
+    schedule_type = normalize_schedule_type(schedule_raw) if schedule_raw else ''
 
     with track_phase('build_query'):
-        query = _build_joined_task_query(keyword, status, defer_courses=True)
+        query = _build_joined_task_query(
+            keyword, status, schedule_type=schedule_type, defer_courses=True
+        )
 
     with track_phase('paginate', page=page, page_size=page_size):
         pagination = query.paginate(
@@ -189,11 +198,15 @@ def list_tasks():
 def export_tasks():
     keyword = request.args.get('keyword', '', type=str).strip()
     status = request.args.get('status', '', type=str).strip()
-    tasks = _build_joined_task_query(keyword, status, defer_courses=True).all()
+    schedule_raw = (request.args.get('schedule_type', '') or '').strip()
+    schedule_type = normalize_schedule_type(schedule_raw) if schedule_raw else ''
+    tasks = _build_joined_task_query(
+        keyword, status, schedule_type=schedule_type, defer_courses=True
+    ).all()
 
     headers = [
         'ID', '网站名称', '课程名称', '姓名', '单位名称', '账号', '密码',
-        '无头模式', '是否收费', '价格', '进度', '状态', '备注', '创建时间', '完成时间', '更新时间',
+        '无头模式', '是否收费', '价格', '进度', '状态', '调度', '备注', '创建时间', '完成时间', '更新时间',
     ]
     wb = Workbook()
     ws = wb.active
@@ -217,6 +230,9 @@ def export_tasks():
             row.get('price') if row.get('price') is not None else '',
             row.get('progress') or '',
             '完成' if row.get('status') == '2' else '未完成',
+            {'manual': '手动', 'daily': '每日', 'monthly': '每月'}.get(
+                row.get('schedule_type') or 'manual', row.get('schedule_type') or '手动'
+            ),
             row.get('remark', ''),
             row.get('create_time', ''),
             row.get('completed_time', ''),
@@ -267,6 +283,10 @@ def create_task():
         return error
     website, course = result
 
+    schedule_type = normalize_schedule_type(data.get('schedule_type', 'manual'))
+    if not schedule_type:
+        return {'code': 400, 'message': '调度类型须为 manual / daily / monthly'}, 400
+
     item = Task(
         nick_name=nick_name,
         username=username,
@@ -279,6 +299,7 @@ def create_task():
         is_charged=is_charged,
         price=price,
         status='1',
+        schedule_type=schedule_type,
     )
     db.session.add(item)
     sync_user_account_from_task(
@@ -346,6 +367,12 @@ def update_task(item_id):
         if field in data:
             setattr(item, field, data[field])
 
+    if 'schedule_type' in data:
+        schedule_type = normalize_schedule_type(data.get('schedule_type'))
+        if not schedule_type:
+            return {'code': 400, 'message': '调度类型须为 manual / daily / monthly'}, 400
+        item.schedule_type = schedule_type
+
     if data.get('status') == '2':
         item.completed_time = datetime.now()
 
@@ -367,7 +394,7 @@ def start_task_api(item_id):
         return {'code': 404, 'message': '任务不存在'}, 404
 
     app = current_app._get_current_object()
-    ok, result = start_task(item_id, app)
+    ok, result = start_task(item_id, app, source='manual')
     if not ok:
         return {'code': 400, 'message': result.get('message', '启动失败')}, 400
 

@@ -11,6 +11,7 @@ export function useTaskManager() {
   const dataList = ref([])
   const keyword = ref('')
   const statusFilter = ref(undefined)
+  const scheduleFilter = ref(undefined)
   const modalVisible = ref(false)
   const editingId = ref(null)
   const websiteOptions = ref([])
@@ -33,6 +34,7 @@ export function useTaskManager() {
     is_head: '1',
     is_charged: '0',
     price: undefined,
+    schedule_type: 'manual',
     remark: '',
   })
 
@@ -94,6 +96,7 @@ export function useTaskManager() {
         page_size: pagination.pageSize,
         keyword: keyword.value,
         status: statusFilter.value || '',
+        schedule_type: scheduleFilter.value || '',
       })
       dataList.value = res.data.list
       pagination.total = res.data.total
@@ -123,6 +126,7 @@ export function useTaskManager() {
       const response = await taskApi.export({
         keyword: keyword.value,
         status: statusFilter.value || '',
+        schedule_type: scheduleFilter.value || '',
       })
       const blob = response.data
       if (blob.type?.includes('application/json')) {
@@ -167,6 +171,7 @@ export function useTaskManager() {
     form.is_head = '1'
     form.is_charged = '0'
     form.price = undefined
+    form.schedule_type = 'manual'
     form.remark = ''
     courseOptions.value = []
     clearUserSuggest()
@@ -183,6 +188,7 @@ export function useTaskManager() {
       form.is_head = record.is_head || '1'
       form.is_charged = record.is_charged || '0'
       form.price = record.price != null && record.price !== '' ? Number(record.price) : undefined
+      form.schedule_type = record.schedule_type || 'manual'
       form.remark = record.remark || ''
       if (form.website_id) {
         await fetchCoursesByWebsite(form.website_id, record.course_id || undefined)
@@ -224,6 +230,7 @@ export function useTaskManager() {
         is_head: form.is_head,
         is_charged: form.is_charged,
         price: form.price ?? '',
+        schedule_type: form.schedule_type || 'manual',
         remark: form.remark,
       }
       if (editingId.value) {
@@ -291,6 +298,11 @@ export function useTaskManager() {
       smsTaskId.value = record.id
       smsCode.value = ''
       smsModalVisible.value = true
+      return
+    }
+    const scheduleType = record.schedule_type || 'manual'
+    if (scheduleType === 'daily' || scheduleType === 'monthly') {
+      message.warning('定时任务不可手动启动，请在电脑端使用「立即执行每日/每月」')
       return
     }
     if (record.is_running) {
@@ -370,6 +382,7 @@ export function useTaskManager() {
       page_size: pagination.pageSize,
       keyword: keyword.value,
       status: statusFilter.value || '',
+      schedule_type: scheduleFilter.value || '',
     }).then((res) => {
       dataList.value = [...dataList.value, ...res.data.list]
       pagination.total = res.data.total
@@ -395,6 +408,7 @@ export function useTaskManager() {
     dataList,
     keyword,
     statusFilter,
+    scheduleFilter,
     modalVisible,
     editingId,
     websiteOptions,

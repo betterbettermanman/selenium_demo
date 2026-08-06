@@ -19,8 +19,26 @@
           <a-select-option value="1">未完成</a-select-option>
           <a-select-option value="2">完成</a-select-option>
         </a-select>
+        <a-select
+          v-model:value="scheduleFilter"
+          placeholder="调度模式"
+          style="width: 120px"
+          allow-clear
+          @change="handleSearch"
+        >
+          <a-select-option value="manual">手动</a-select-option>
+          <a-select-option value="daily">每日</a-select-option>
+          <a-select-option value="monthly">每月</a-select-option>
+        </a-select>
       </a-space>
       <a-space>
+        <a-button :loading="schedulerRunning === 'daily'" @click="handleRunSchedule('daily')">
+          立即执行每日
+        </a-button>
+        <a-button :loading="schedulerRunning === 'monthly'" @click="handleRunSchedule('monthly')">
+          立即执行每月
+        </a-button>
+        <a-button @click="openSchedulerModal">调度设置</a-button>
         <a-button :loading="exporting" @click="handleExport">导出</a-button>
         <a-button type="primary" @click="openModal()">新增任务</a-button>
       </a-space>
@@ -66,6 +84,9 @@
             </span>
           </a-space>
         </template>
+        <template v-if="column.key === 'schedule_type'">
+          {{ scheduleTypeLabel(record.schedule_type) }}
+        </template>
         <template v-if="column.key === 'is_head'">
           {{ record.is_head === '1' ? '无头' : '有头' }}
         </template>
@@ -83,7 +104,8 @@
               type="link"
               size="small"
               :loading="startingTaskId === record.id"
-              :disabled="record.is_running && !record.waiting_sms"
+              :disabled="!canManualStart(record)"
+              :title="manualStartTip(record)"
               @click="handleStart(record)"
             >
               启动
@@ -216,8 +238,48 @@
             <a-select-option value="0">有头模式</a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="调度方式">
+          <a-select v-model:value="form.schedule_type">
+            <a-select-option value="manual">手动（可点启动）</a-select-option>
+            <a-select-option value="daily">每日（仅定时）</a-select-option>
+            <a-select-option value="monthly">每月（仅定时）</a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item label="备注">
           <a-input v-model:value="form.remark" placeholder="请输入备注" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="schedulerModalVisible"
+      title="调度设置"
+      @ok="handleSaveScheduler"
+      :confirm-loading="schedulerSaving"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="最大同时运行任务数" required>
+          <a-input-number
+            v-model:value="schedulerForm.max_running_tasks"
+            :min="1"
+            :precision="0"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="每日触发时刻 (HH:mm)" required>
+          <a-input v-model:value="schedulerForm.daily_time" placeholder="08:00" />
+        </a-form-item>
+        <a-form-item label="每月触发日 (1-28)" required>
+          <a-input-number
+            v-model:value="schedulerForm.monthly_day"
+            :min="1"
+            :max="28"
+            :precision="0"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="每月触发时刻 (HH:mm)" required>
+          <a-input v-model:value="schedulerForm.monthly_time" placeholder="08:00" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -258,7 +320,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { LoadingOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { courseApi, taskApi, websiteApi } from '../api'
+import { courseApi, schedulerApi, taskApi, websiteApi } from '../api'
 import { useUserAccountSuggest } from '../composables/useUserAccountSuggest'
 
 const columns = [
@@ -271,6 +333,7 @@ const columns = [
   { title: '是否收费', key: 'is_charged', width: 90 },
   { title: '价格', key: 'price', width: 90 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
+  { title: '调度', key: 'schedule_type', width: 80 },
   { title: '状态', key: 'status', width: 170 },
   { title: '备注', dataIndex: 'remark', key: 'remark', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
@@ -285,6 +348,7 @@ const courseLoading = ref(false)
 const dataList = ref([])
 const keyword = ref('')
 const statusFilter = ref(undefined)
+const scheduleFilter = ref(undefined)
 const modalVisible = ref(false)
 const editingId = ref(null)
 const websiteOptions = ref([])
@@ -297,6 +361,15 @@ const smsSubmitting = ref(false)
 const smsResending = ref(false)
 const smsCode = ref('')
 const smsTaskId = ref(null)
+const schedulerRunning = ref('')
+const schedulerModalVisible = ref(false)
+const schedulerSaving = ref(false)
+const schedulerForm = reactive({
+  max_running_tasks: 5,
+  daily_time: '08:00',
+  monthly_day: 1,
+  monthly_time: '08:00',
+})
 
 const form = reactive({
   website_id: undefined,
@@ -307,8 +380,28 @@ const form = reactive({
   is_head: '1',
   is_charged: '0',
   price: undefined,
+  schedule_type: 'manual',
   remark: '',
 })
+
+const scheduleTypeLabel = (value) => {
+  const map = { manual: '手动', daily: '每日', monthly: '每月' }
+  return map[value || 'manual'] || value || '手动'
+}
+
+const canManualStart = (record) => {
+  if (record.is_running && !record.waiting_sms) return false
+  const type = record.schedule_type || 'manual'
+  return type === 'manual'
+}
+
+const manualStartTip = (record) => {
+  const type = record.schedule_type || 'manual'
+  if (type === 'daily' || type === 'monthly') {
+    return '定时任务不可手动启动，请使用「立即执行每日/每月」'
+  }
+  return ''
+}
 
 const {
   userSuggestOptions,
@@ -368,6 +461,7 @@ const fetchList = async () => {
       page_size: pagination.pageSize,
       keyword: keyword.value,
       status: statusFilter.value || '',
+      schedule_type: scheduleFilter.value || '',
     })
     dataList.value = res.data.list
     pagination.total = res.data.total
@@ -397,6 +491,7 @@ const handleExport = async () => {
     const response = await taskApi.export({
       keyword: keyword.value,
       status: statusFilter.value || '',
+      schedule_type: scheduleFilter.value || '',
     })
     const blob = response.data
     if (blob.type?.includes('application/json')) {
@@ -441,6 +536,7 @@ const resetForm = () => {
   form.is_head = '1'
   form.is_charged = '0'
   form.price = undefined
+  form.schedule_type = 'manual'
   form.remark = ''
   courseOptions.value = []
   clearUserSuggest()
@@ -457,6 +553,7 @@ const openModal = async (record = null) => {
     form.is_head = record.is_head || '1'
     form.is_charged = record.is_charged || '0'
     form.price = record.price != null && record.price !== '' ? Number(record.price) : undefined
+    form.schedule_type = record.schedule_type || 'manual'
     form.remark = record.remark || ''
     if (form.website_id) {
       await fetchCoursesByWebsite(form.website_id, record.course_id || undefined)
@@ -498,6 +595,7 @@ const handleSubmit = async () => {
       is_head: form.is_head,
       is_charged: form.is_charged,
       price: form.price ?? '',
+      schedule_type: form.schedule_type || 'manual',
       remark: form.remark,
     }
     if (editingId.value) {
@@ -566,6 +664,10 @@ const handleStart = async (record) => {
     smsModalVisible.value = true
     return
   }
+  if (!canManualStart(record)) {
+    message.warning(manualStartTip(record) || '该任务不可手动启动')
+    return
+  }
   if (record.is_running) {
     message.warning('任务正在执行中')
     return
@@ -599,6 +701,49 @@ const handleStart = async (record) => {
   } finally {
     hideLoading()
     startingTaskId.value = null
+  }
+}
+
+const openSchedulerModal = async () => {
+  try {
+    const res = await schedulerApi.getConfig()
+    const cfg = res.data || {}
+    schedulerForm.max_running_tasks = cfg.max_running_tasks ?? 5
+    schedulerForm.daily_time = cfg.daily_time || '08:00'
+    schedulerForm.monthly_day = cfg.monthly_day ?? 1
+    schedulerForm.monthly_time = cfg.monthly_time || '08:00'
+    schedulerModalVisible.value = true
+  } catch (error) {
+    message.error(error.message || '读取调度配置失败')
+  }
+}
+
+const handleSaveScheduler = async () => {
+  schedulerSaving.value = true
+  try {
+    const res = await schedulerApi.updateConfig({
+      max_running_tasks: schedulerForm.max_running_tasks,
+      daily_time: schedulerForm.daily_time,
+      monthly_day: schedulerForm.monthly_day,
+      monthly_time: schedulerForm.monthly_time,
+    })
+    message.success(res.message || '调度配置已保存')
+    schedulerModalVisible.value = false
+  } finally {
+    schedulerSaving.value = false
+  }
+}
+
+const handleRunSchedule = async (type) => {
+  schedulerRunning.value = type
+  try {
+    const res = await schedulerApi.run(type)
+    message.success(res.message || '扫描完成')
+    fetchList()
+  } catch (error) {
+    message.error(error.response?.data?.message || error.message || '扫描失败')
+  } finally {
+    schedulerRunning.value = ''
   }
 }
 
