@@ -49,7 +49,7 @@
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1690 }"
+      :scroll="{ x: 1590 }"
       row-key="id"
       @change="handleTableChange"
     >
@@ -326,11 +326,11 @@ import { useUserAccountSuggest } from '../composables/useUserAccountSuggest'
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70, fixed: 'left' },
   { title: '网站/课程', key: 'website_course', width: 200, ellipsis: true },
-  { title: '姓名/单位', key: 'user_info', width: 180, ellipsis: true },
+  { title: '姓名/单位', key: 'user_info', width: 120, ellipsis: true },
   { title: '账号', dataIndex: 'username', key: 'username', width: 120 },
   { title: '密码', dataIndex: 'password', key: 'password', width: 120, ellipsis: true },
-  { title: '无头模式', key: 'is_head', width: 90 },
-  { title: '是否收费', key: 'is_charged', width: 90 },
+  { title: '模式', key: 'is_head', width: 70 },
+  { title: '收费', key: 'is_charged', width: 70 },
   { title: '价格', key: 'price', width: 90 },
   { title: '进度', dataIndex: 'progress', key: 'progress', width: 100 },
   { title: '调度', key: 'schedule_type', width: 80 },
@@ -348,7 +348,7 @@ const courseLoading = ref(false)
 const dataList = ref([])
 const keyword = ref('')
 const statusFilter = ref(undefined)
-const scheduleFilter = ref(undefined)
+const scheduleFilter = ref('manual')
 const modalVisible = ref(false)
 const editingId = ref(null)
 const websiteOptions = ref([])

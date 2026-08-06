@@ -11,7 +11,7 @@ export function useTaskManager() {
   const dataList = ref([])
   const keyword = ref('')
   const statusFilter = ref(undefined)
-  const scheduleFilter = ref(undefined)
+  const scheduleFilter = ref('manual')
   const modalVisible = ref(false)
   const editingId = ref(null)
   const websiteOptions = ref([])

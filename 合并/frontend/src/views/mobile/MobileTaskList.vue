@@ -343,10 +343,10 @@ const statusTabs = [
 ]
 
 const scheduleTabs = [
-  { label: '全部调度', value: undefined },
   { label: '手动', value: 'manual' },
   { label: '每日', value: 'daily' },
   { label: '每月', value: 'monthly' },
+  { label: '全部调度', value: undefined },
 ]
 
 const {
