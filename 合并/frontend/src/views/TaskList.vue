@@ -45,6 +45,8 @@
     </div>
 
     <a-table
+      class="task-table"
+      size="small"
       :columns="columns"
       :data-source="dataList"
       :loading="loading"
@@ -826,14 +828,21 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.task-table :deep(.ant-table-thead > tr > th),
+.task-table :deep(.ant-table-tbody > tr > td) {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .stacked-cell__primary {
-  line-height: 1.4;
+  line-height: 1.25;
+  font-size: 13px;
 }
 
 .stacked-cell__secondary {
   color: rgba(0, 0, 0, 0.45);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

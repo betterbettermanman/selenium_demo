@@ -32,11 +32,12 @@
     </div>
 
     <a-table
+      class="user-account-table"
+      size="small"
       :columns="columns"
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1200 }"
       row-key="id"
       @change="handleTableChange"
     >
@@ -107,13 +108,13 @@ import { message } from 'ant-design-vue'
 import { userAccountApi, websiteApi } from '../api'
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 70, fixed: 'left' },
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
   { title: '网站名称', dataIndex: 'website_name', key: 'website_name', width: 160, ellipsis: true },
   { title: '姓名/单位', key: 'user_info', width: 200, ellipsis: true },
   { title: '账号', dataIndex: 'username', key: 'username', width: 140 },
   { title: '密码', dataIndex: 'password', key: 'password', width: 140, ellipsis: true },
   { title: '创建时间', dataIndex: 'create_time', key: 'create_time', width: 170 },
-  { title: '操作', key: 'action', width: 180, fixed: 'right' },
+  { title: '操作', key: 'action', width: 180 },
 ]
 
 const loading = ref(false)
@@ -305,14 +306,21 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.user-account-table :deep(.ant-table-thead > tr > th),
+.user-account-table :deep(.ant-table-tbody > tr > td) {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .stacked-cell__primary {
-  line-height: 1.4;
+  line-height: 1.25;
+  font-size: 13px;
 }
 
 .stacked-cell__secondary {
   color: rgba(0, 0, 0, 0.45);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
