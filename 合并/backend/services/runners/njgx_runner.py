@@ -208,6 +208,10 @@ class NjgxTaskRunner(SeleniumTaskRunner):
                 self._log_warning('未找到课程链接')
                 return False
 
+            total = len(links)
+            done = 0
+            play_link = None
+            play_name = ''
             for link in links:
                 status = (link.text or '').strip()
                 course_name = self.driver.execute_script(
@@ -217,11 +221,21 @@ class NjgxTaskRunner(SeleniumTaskRunner):
                 course_name = (course_name or '').replace('&lt;', '').strip()
                 self._log_info('课程: %s 状态: %s', course_name, status)
 
-                if status != '已完成':
-                    self._log_info('点击播放: %s', course_name)
-                    link.click()
-                    time.sleep(2)
-                    return True
+                if status == '已完成':
+                    done += 1
+                    continue
+                if play_link is None:
+                    play_link = link
+                    play_name = course_name
+
+            self._update_task_progress(f'{done}/{total}')
+            self._log_info('课表进度 已完成=%s/%s', done, total)
+
+            if play_link is not None:
+                self._log_info('点击播放: %s', play_name)
+                play_link.click()
+                time.sleep(2)
+                return True
             return False
         except Exception:
             self._log_exception('查找未完成课程失败')
