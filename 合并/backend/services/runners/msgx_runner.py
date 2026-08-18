@@ -34,6 +34,8 @@ class MsgxTaskRunner(SeleniumTaskRunner):
             'Host': 'gp.chinahrt.com',
         }
         self._play_status_thread = None
+        self._course_list_total = 0
+        self._course_list_done = 0
 
     def run_main(self):
         self._log_info(
@@ -197,8 +199,9 @@ class MsgxTaskRunner(SeleniumTaskRunner):
                 ".//button[contains(text(), '去学习') or contains(text(), '继续学习')]",
             ).click()
             self._log_info('进入课程学习')
-            self._open_course()
-            return 'course'
+            if self._open_course():
+                return 'course'
+            return 'complete'
         except NoSuchElementException:
             self._log_warning('未找到学习按钮')
 
@@ -215,7 +218,8 @@ class MsgxTaskRunner(SeleniumTaskRunner):
         self.is_complete = True
         return 'complete'
 
-    def _open_course(self):
+    def _open_course(self) -> bool:
+        """打开课表中第一门未完成课程并开始播放。返回是否成功进入播放。"""
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
@@ -229,14 +233,38 @@ class MsgxTaskRunner(SeleniumTaskRunner):
         ul_element = course_list_div.find_element(By.TAG_NAME, 'ul')
         all_li = ul_element.find_elements(By.TAG_NAME, 'li')
 
+        total = len(all_li)
+        done = 0
+        target_li = None
         for li in all_li:
-            progress = li.find_element(By.CSS_SELECTOR, 'div.progress-line').find_element(By.TAG_NAME, 'span').text
+            try:
+                progress = (
+                    li.find_element(By.CSS_SELECTOR, 'div.progress-line')
+                    .find_element(By.TAG_NAME, 'span')
+                    .text
+                    or ''
+                ).strip()
+            except Exception:
+                progress = ''
             if progress == '100%':
+                done += 1
                 continue
-            WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable(li.find_element(By.CSS_SELECTOR, 'div'))
-            ).click()
-            break
+            if target_li is None:
+                target_li = li
+
+        self._course_list_total = total
+        self._course_list_done = done
+        self._update_task_progress(f'{done}/{total}')
+        self._log_info('课表进度 已完成=%s/%s', done, total)
+
+        if target_li is None:
+            self._log_info('课程列表均已学完')
+            self.is_complete = True
+            return False
+
+        WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable(target_li.find_element(By.CSS_SELECTOR, 'div'))
+        ).click()
 
         original_window = self.driver.current_window_handle
         WebDriverWait(self.driver, 10).until(lambda d: len(d.window_handles) > 1)
@@ -270,23 +298,247 @@ class MsgxTaskRunner(SeleniumTaskRunner):
             self.driver.close()
             self.driver.switch_to.window(second_new)
 
-        iframe = WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, '//div[@class="video-container"]/iframe'))
-        )
-        self.driver.switch_to.frame(iframe)
+        # 进入 iframe 前先解析顶层 URL 参数（iframe 内 current_url 可能不含 courseId）
+        page_url = self.driver.current_url
+        self.current_course_id = self._extract_hash_param(page_url, 'courseId') or ''
+        self.trainplan_id = self._extract_hash_param(page_url, 'trainplanId') or ''
+        self.platform_id = self._extract_hash_param(page_url, 'platformId') or ''
+
+        if not self._ensure_video_iframe():
+            raise RuntimeError('无法进入视频 iframe')
         pause = WebDriverWait(self.driver, 10).until(
             EC.visibility_of_element_located((By.XPATH, '//div[starts-with(@class, "pausecenter")]'))
         )
         pause.click()
-
-        self.current_course_id = self._extract_hash_param(self.driver.current_url, 'courseId') or ''
-        self.trainplan_id = self._extract_hash_param(self.driver.current_url, 'trainplanId') or ''
-        self.platform_id = self._extract_hash_param(self.driver.current_url, 'platformId') or ''
-        self._log_info('开始播放 courseId=%s', self.current_course_id)
+        time.sleep(1)
+        # 首次点击后若仍暂停，用 JS play 兜底（与监控逻辑一致）
+        info = self._get_video_play_info()
+        if info and (info.get('paused') or info.get('currentTime', 0) == 0):
+            self._resume_video()
+        self._log_info(
+            '开始播放 courseId=%s 课表进度=%s/%s',
+            self.current_course_id, self._course_list_done, self._course_list_total,
+        )
+        return True
 
     def _extract_hash_param(self, url: str, param_name: str) -> str:
         match = re.search(rf'{param_name}=([^&]+)', url)
         return unquote(match.group(1)) if match else ''
+
+    @staticmethod
+    def _short_exc(exc: BaseException) -> str:
+        first = str(exc).split('\n', 1)[0].strip()
+        if len(first) > 180:
+            first = first[:180] + '...'
+        return f'{type(exc).__name__}: {first}'
+
+    def _ensure_video_iframe(self) -> bool:
+        """回到顶层后进入视频 iframe，避免监控线程丢失 frame 上下文。"""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+
+        try:
+            self.driver.switch_to.default_content()
+            iframe = WebDriverWait(self.driver, 8).until(
+                EC.presence_of_element_located((By.XPATH, '//div[@class="video-container"]/iframe'))
+            )
+            self.driver.switch_to.frame(iframe)
+            return True
+        except Exception as exc:
+            self._log_warning('进入视频 iframe 失败: %s', self._short_exc(exc))
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+            return False
+
+    def _get_video_play_info(self):
+        """读取当前 frame 内 video 播放状态。"""
+        try:
+            return self.driver.execute_script(
+                """
+                var video = document.querySelector('video');
+                if (!video) return null;
+                return {
+                    paused: !!video.paused,
+                    ended: !!video.ended,
+                    currentTime: video.currentTime || 0,
+                    duration: video.duration || 0
+                };
+                """
+            )
+        except Exception:
+            return None
+
+    def _video_still_paused(self, video=None) -> bool:
+        try:
+            if video is not None:
+                return bool(self.driver.execute_script(
+                    'var v = arguments[0]; return !v || !!v.paused;', video
+                ))
+            info = self._get_video_play_info()
+            return True if not info else bool(info.get('paused'))
+        except Exception:
+            return True
+
+    def _find_video_el(self):
+        from selenium.webdriver.common.by import By
+
+        for selector in ('video', 'video.vjs-tech', '#my-video video', '#my-video'):
+            try:
+                els = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                for el in els:
+                    tag = (el.tag_name or '').lower()
+                    if tag == 'video':
+                        return el
+            except Exception:
+                continue
+        return None
+
+    def _dismiss_player_overlays(self, video) -> None:
+        from selenium.webdriver.common.by import By
+
+        try:
+            self.driver.execute_script(
+                """
+                var video = arguments[0];
+                var root = video && (video.closest('.video-js, .vjs-tech, #my-video') || video.parentElement);
+                if (!root) root = document;
+                root.querySelectorAll(
+                    '[class*="pausecenter"], .vjs-modal-dialog, .vjs-loading-spinner, .vjs-big-play-button'
+                ).forEach(function (el) {
+                    try {
+                        if (el.classList && el.classList.contains('vjs-big-play-button')) return;
+                        el.style.pointerEvents = 'none';
+                    } catch (e) {}
+                });
+                """,
+                video,
+            )
+        except Exception:
+            pass
+
+        try:
+            overlays = self.driver.find_elements(
+                By.XPATH, '//div[starts-with(@class, "pausecenter")]'
+            )
+            for el in overlays:
+                if not el.is_displayed():
+                    continue
+                try:
+                    el.click()
+                except Exception:
+                    try:
+                        self.driver.execute_script('arguments[0].click();', el)
+                    except Exception:
+                        pass
+                self._log_info('已点击 pausecenter 遮罩')
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+    def _try_js_play(self, video) -> bool:
+        """通过 video.play() 恢复；有声失败则静音重试。"""
+        try:
+            ok = self.driver.execute_async_script(
+                """
+                var video = arguments[0];
+                var done = arguments[arguments.length - 1];
+                function tryPlay(muted) {
+                    try { video.muted = !!muted; } catch (e) {}
+                    var p = video.play();
+                    if (!p || typeof p.then !== 'function') {
+                        done(!video.paused);
+                        return;
+                    }
+                    p.then(function () { done(true); })
+                     .catch(function () {
+                        if (!muted) {
+                            tryPlay(true);
+                        } else {
+                            done(false);
+                        }
+                     });
+                }
+                tryPlay(false);
+                """,
+                video,
+            )
+            time.sleep(0.5)
+            if ok and not self._video_still_paused(video):
+                self._log_info('通过 JS play() 恢复播放')
+                return True
+            self._log_info('JS play() 未恢复 ok=%s paused=%s', ok, self._video_still_paused(video))
+        except Exception as exc:
+            self._log_info('JS play() 失败: %s', self._short_exc(exc))
+        return False
+
+    def _resume_video(self) -> bool:
+        """恢复播放：遮罩 → 控制条 → JS play → 点击 video。"""
+        from selenium.common import ElementClickInterceptedException, ElementNotInteractableException
+        from selenium.webdriver.common.action_chains import ActionChains
+        from selenium.webdriver.common.by import By
+
+        video = self._find_video_el()
+        if video is None:
+            # 无 video 时仍尝试点 pausecenter
+            self._dismiss_player_overlays(None)
+            return not self._video_still_paused()
+
+        self._dismiss_player_overlays(video)
+        if not self._video_still_paused(video):
+            return True
+
+        for selector in (
+            'button.vjs-play-control',
+            '.vjs-big-play-button',
+            '.vjs-play-control',
+            'button.vjs-big-play-button',
+        ):
+            try:
+                for btn in self.driver.find_elements(By.CSS_SELECTOR, selector):
+                    if not btn.is_displayed():
+                        continue
+                    try:
+                        btn.click()
+                    except (ElementClickInterceptedException, ElementNotInteractableException):
+                        self.driver.execute_script('arguments[0].click();', btn)
+                    except Exception:
+                        try:
+                            self.driver.execute_script('arguments[0].click();', btn)
+                        except Exception:
+                            continue
+                    time.sleep(0.8)
+                    if not self._video_still_paused(video):
+                        self._log_info('通过 %s 恢复播放', selector)
+                        return True
+            except Exception:
+                continue
+
+        if self._try_js_play(video):
+            return True
+
+        click_attempts = (
+            ('native', lambda: video.click()),
+            ('actions', lambda: ActionChains(self.driver).move_to_element(video).click().perform()),
+            ('js', lambda: self.driver.execute_script('arguments[0].click();', video)),
+        )
+        for name, clicker in click_attempts:
+            try:
+                clicker()
+                time.sleep(0.8)
+                if not self._video_still_paused(video):
+                    self._log_info('通过点击 video(%s) 恢复播放', name)
+                    return True
+            except (ElementClickInterceptedException, ElementNotInteractableException) as exc:
+                self._log_info('点击 video(%s) 被拦截，继续: %s', name, self._short_exc(exc))
+            except Exception as exc:
+                self._log_info('点击 video(%s) 失败: %s', name, self._short_exc(exc))
+
+        if self._try_js_play(video):
+            return True
+        return not self._video_still_paused(video)
 
     def _start_monitors(self):
         self._start_monitor_thread(self._check_course_success, suffix='monitor')
@@ -318,6 +570,17 @@ class MsgxTaskRunner(SeleniumTaskRunner):
                     percent = detail.get('learnPercent', 0)
                     self._log_info('检测课程 %s 学习进度: %s%%', self.current_course_id, percent)
                     if percent == 100:
+                        if self._course_list_total > 0:
+                            self._course_list_done = min(
+                                self._course_list_done + 1, self._course_list_total,
+                            )
+                            self._update_task_progress(
+                                f'{self._course_list_done}/{self._course_list_total}'
+                            )
+                            self._log_info(
+                                '单课完成，课表进度更新为 %s/%s',
+                                self._course_list_done, self._course_list_total,
+                            )
                         if len(self.driver.window_handles) > 1:
                             self.driver.close()
                             self.driver.switch_to.window(self.driver.window_handles[0])
@@ -330,32 +593,64 @@ class MsgxTaskRunner(SeleniumTaskRunner):
             time.sleep(sleep_time)
 
     def _check_course_play_status(self):
-        from selenium.common import NoSuchElementException, TimeoutException
+        """监控播放：检测课程评价；检测 video.paused 并恢复（对齐 LSGX）。"""
+        from selenium.common import TimeoutException
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
 
+        self._log_info('开始监听播放状态')
         while self.is_running:
-            time.sleep(10)
+            time.sleep(15)
             try:
-                element = WebDriverWait(self.driver, 5).until(
-                    EC.presence_of_element_located((By.XPATH, '//span[text()="课程评价"]'))
-                )
-                if element.is_displayed():
-                    self._log_info('检测到课程评价，当前小节完成')
-                    if len(self.driver.window_handles) > 1:
-                        self.driver.close()
-                        self.driver.switch_to.window(self.driver.window_handles[0])
-                    time.sleep(5)
-                    continue
-            except TimeoutException:
-                pass
+                # 「课程评价」在顶层页面，必须先离开 iframe
+                self.driver.switch_to.default_content()
+                try:
+                    element = WebDriverWait(self.driver, 3).until(
+                        EC.presence_of_element_located((By.XPATH, '//span[text()="课程评价"]'))
+                    )
+                    if element.is_displayed():
+                        self._log_info('检测到课程评价，当前小节完成')
+                        if len(self.driver.window_handles) > 1:
+                            self.driver.close()
+                            self.driver.switch_to.window(self.driver.window_handles[0])
+                        time.sleep(5)
+                        continue
+                except TimeoutException:
+                    pass
 
-            try:
-                pause = WebDriverWait(self.driver, 3).until(
-                    EC.presence_of_element_located((By.XPATH, '//div[starts-with(@class, "pausecenter")]'))
+                if not self._ensure_video_iframe():
+                    continue
+
+                info = self._get_video_play_info()
+                if not info:
+                    self._log_warning('未找到 video，尝试点击 pausecenter')
+                    self._dismiss_player_overlays(None)
+                    continue
+
+                progress = 0.0
+                if info.get('duration') and info['duration'] > 0:
+                    progress = (info['currentTime'] / info['duration']) * 100
+                self._log_info(
+                    '播放进度: %.1f%% paused=%s ended=%s',
+                    progress, info.get('paused'), info.get('ended'),
                 )
-                if pause.value_of_css_property('display') != 'none':
-                    pause.click()
-            except (TimeoutException, NoSuchElementException):
-                pass
+
+                if info.get('ended'):
+                    self._log_info('当前视频已播完，等待课程进度同步')
+                    continue
+
+                if info.get('paused') or info.get('currentTime', 0) == 0:
+                    reason = '暂停' if info.get('paused') and info.get('currentTime', 0) > 0 else '未开始'
+                    self._log_info('视频%s，尝试继续播放', reason)
+                    if not self._resume_video():
+                        self._log_warning(
+                            '继续播放失败，稍后重试 currentTime=%.1f',
+                            info.get('currentTime', 0),
+                        )
+            except Exception as exc:
+                self._log_warning('检查播放状态异常: %s', self._short_exc(exc))
+                try:
+                    self.driver.switch_to.default_content()
+                except Exception:
+                    pass
