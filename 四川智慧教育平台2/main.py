@@ -145,7 +145,7 @@ def update_data(username, status=None, requiredPeriod=None, electivePeriod=None)
 task_contain = []
 max_task_num = 5
 # todo 需要动态修改的
-target_num = 10
+target_num = 11
 
 
 def continue_task():
