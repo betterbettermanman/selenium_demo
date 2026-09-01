@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS `task` (
   `completed_time` datetime DEFAULT NULL COMMENT '完成时间',
   PRIMARY KEY (`id`) USING BTREE,
   KEY `idx_task_website_code` (`website_code`),
-  KEY `idx_task_status_id` (`status`, `id`)
+  KEY `idx_task_status_id` (`status`, `id`),
+  KEY `idx_task_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='任务列表';
 
 -- 用户账号

@@ -8,6 +8,9 @@
         mode="inline"
         @click="onMenuClick"
       >
+        <a-menu-item key="/stats">
+          <span>数据统计</span>
+        </a-menu-item>
         <a-menu-item key="/websites">
           <span>网站管理</span>
         </a-menu-item>

@@ -88,6 +88,10 @@ export const schedulerApi = {
   run: (type) => request.post('/scheduler/run', { type }, { timeout: 120000 }),
 }
 
+export const statsApi = {
+  overview: (params) => request.get('/stats/overview', { params }),
+}
+
 export const userAccountApi = {
   list: (params, config = {}) => request.get('/user-accounts', { params, ...config }),
   create: (data) => request.post('/user-accounts', data),

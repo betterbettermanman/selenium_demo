@@ -11,6 +11,7 @@ from routes.course import course_bp
 from routes.task import task_bp
 from routes.user_account import user_account_bp
 from routes.scheduler import scheduler_bp
+from routes.stats import stats_bp
 from utils.logging_setup import setup_logging
 from utils.perf_log import setup_perf_logging
 import services.runners  # noqa: F401  注册任务执行器
@@ -32,6 +33,7 @@ def create_app():
     app.register_blueprint(task_bp)
     app.register_blueprint(user_account_bp)
     app.register_blueprint(scheduler_bp)
+    app.register_blueprint(stats_bp)
     _register_health_route(app)
     _register_frontend_routes(app)
 
@@ -58,6 +60,25 @@ def _ensure_task_schedule_type_column():
     except Exception as exc:
         db.session.rollback()
         logging.warning('检查/添加 schedule_type 失败: %s', exc)
+
+
+def _ensure_task_create_time_index():
+    """兼容已有库：无 create_time 索引时自动补充，加速按接单日统计。"""
+    try:
+        exists = db.session.execute(text(
+            "SELECT COUNT(*) FROM information_schema.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'task' AND INDEX_NAME = 'idx_task_create_time'"
+        )).scalar()
+        if not exists:
+            db.session.execute(text(
+                "ALTER TABLE `task` ADD INDEX `idx_task_create_time` (`create_time`)"
+            ))
+            db.session.commit()
+            logging.info('已自动添加 task.idx_task_create_time 索引')
+    except Exception as exc:
+        db.session.rollback()
+        logging.warning('检查/添加 idx_task_create_time 失败: %s', exc)
 
 
 def _warmup_db():
@@ -106,6 +127,7 @@ with app.app_context():
     try:
         db.create_all()
         _ensure_task_schedule_type_column()
+        _ensure_task_create_time_index()
         _warmup_db()
     except Exception as exc:
         logging.warning('应用初始化数据库失败: %s', exc)

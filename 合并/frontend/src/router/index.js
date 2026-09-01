@@ -5,6 +5,7 @@ import WebsiteList from '../views/WebsiteList.vue'
 import CourseList from '../views/CourseList.vue'
 import TaskList from '../views/TaskList.vue'
 import UserAccountList from '../views/UserAccountList.vue'
+import Stats from '../views/Stats.vue'
 import MobileTaskList from '../views/mobile/MobileTaskList.vue'
 
 const routes = [
@@ -12,7 +13,8 @@ const routes = [
     path: '/',
     component: PcLayout,
     children: [
-      { path: '', redirect: '/websites' },
+      { path: '', redirect: '/stats' },
+      { path: 'stats', name: 'Stats', component: Stats, meta: { title: '数据统计' } },
       { path: 'websites', name: 'WebsiteList', component: WebsiteList, meta: { title: '网站管理' } },
       { path: 'courses', name: 'CourseList', component: CourseList, meta: { title: '课程管理' } },
       { path: 'tasks', name: 'TaskList', component: TaskList, meta: { title: '任务管理' } },
