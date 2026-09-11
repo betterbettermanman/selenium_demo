@@ -5,6 +5,7 @@ from services.runners.lsgx_runner import LsgxTaskRunner  # noqa: F401
 from services.runners.lzgx_runner import LzgxTaskRunner  # noqa: F401
 from services.runners.msgx_runner import MsgxTaskRunner  # noqa: F401
 from services.runners.njgx_runner import NjgxTaskRunner  # noqa: F401
+from services.runners.rjpx_runner import RjpxTaskRunner  # noqa: F401
 from services.runners.scgb_runner import ScgbTaskRunner  # noqa: F401
 from services.runners.scgx_runner import ScgxTaskRunner  # noqa: F401
 from services.runners.scxf_runner import ScxfTaskRunner  # noqa: F401
@@ -14,6 +15,6 @@ from services.runners.zxzh_runner import ZxzhTaskRunner  # noqa: F401
 __all__ = [
     'DefaultTaskRunner', 'SeleniumTaskRunner', 'register_runner',
     'GygxTaskRunner', 'LsgxTaskRunner', 'LzgxTaskRunner', 'MsgxTaskRunner',
-    'NjgxTaskRunner', 'ScgbTaskRunner', 'ScgxTaskRunner', 'ScxfTaskRunner',
-    'SczhTaskRunner', 'ZxzhTaskRunner',
+    'NjgxTaskRunner', 'RjpxTaskRunner', 'ScgbTaskRunner', 'ScgxTaskRunner',
+    'ScxfTaskRunner', 'SczhTaskRunner', 'ZxzhTaskRunner',
 ]

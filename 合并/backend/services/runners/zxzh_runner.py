@@ -27,6 +27,11 @@ SLIDER_MAX_RETRY = 8
 CREDIT_TARGET = 10
 VIDEO_POLL_SECONDS = 60
 VIDEO_MAX_WAIT_SECONDS = 3 * 60 * 60  # 单节最长等待 3 小时
+# 进度连续 N 轮几乎不动（含倍速弹框暂停）→ 刷新当前课页重播
+VIDEO_STUCK_ROUNDS = 3
+VIDEO_STUCK_EPS_SECONDS = 1.0
+VIDEO_REOPEN_MAX = 3
+SPEED_WARNING_KEYWORDS = ('倍速播放', '关闭倍速', '已自动暂停学习')
 # 专题页单课进度：已学习 2.15 / 已认定 2.00 / 认定 2 学时
 COURSE_LEARNED_PATTERN = re.compile(r'已学习\s*([\d.]+)')
 COURSE_CREDIT_PATTERN = re.compile(
@@ -39,6 +44,12 @@ TRAINING_PAGE_LOAD_SECONDS = 8
 COURSE_CARD_WAIT_SECONDS = 20
 COURSE_PROGRESS_RETRY = 6
 COURSE_PROGRESS_RETRY_INTERVAL = 2.0
+# 标题进 DOM 后学时接口仍可能晚到：须等总进度/课卡学时连续多轮不变再判定
+PROGRESS_STABLE_ROUNDS = 3
+PROGRESS_ZERO_STABLE_ROUNDS = 5  # 全 0 更像占位，要求更长稳定
+PROGRESS_STABLE_INTERVAL = 2.0
+PROGRESS_MIN_WAIT_SECONDS = 10  # 卡片就绪后至少再等这么久才允许判定
+PROGRESS_WAIT_MAX_SECONDS = 36
 # 专题页「总进度」：已认定 / 要求认定（class 带 hash，用 contains 匹配）
 TOTAL_PROGRESS_BLOCK_XPATH = (
     "//*[contains(@class,'topprocess') and contains(.,'要求认定')]"
@@ -414,6 +425,7 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             time.sleep(TRAINING_PAGE_LOAD_SECONDS)
         self.list_window = self.driver.current_window_handle
         self._wait_training_course_cards()
+        self._wait_training_progress_ready()
 
     def _wait_training_course_cards(self):
         """等待专题页课程卡片出现（标题文本进 DOM），避免读进度过早失败。"""
@@ -431,8 +443,6 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                     '专题页课程卡片已就绪 matched=%s body_len=%s',
                     hit[:40], last_body_len,
                 )
-                # 卡片刚出现时学时文案可能仍在刷新，稍等稳定
-                time.sleep(2)
                 return
             time.sleep(1)
         self._log_warning(
@@ -440,6 +450,142 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             COURSE_CARD_WAIT_SECONDS, last_body_len,
             (titles[0][:40] if titles else ''),
         )
+
+    def _wait_training_progress_ready(self):
+        """标题就绪后继续等学时数据：总进度与课卡认定值须连续多轮不变。
+
+        平台常见：卡片标题先出，已学习/已认定仍是占位 0.00，稍后再被接口覆盖。
+        若此时开播，会把已完成课程误判为未完成，造成重复播放。
+        """
+        started = time.time()
+        deadline = started + PROGRESS_WAIT_MAX_SECONDS
+        last_snap = None
+        stable = 0
+        round_idx = 0
+        while time.time() < deadline and self.is_running and not self._stopped:
+            round_idx += 1
+            snap = self._progress_snapshot()
+            if snap is None:
+                self._log_info(
+                    '等待学时数据加载中 round=%s reason=进度文案未就绪',
+                    round_idx,
+                )
+                stable = 0
+                last_snap = None
+                time.sleep(PROGRESS_STABLE_INTERVAL)
+                continue
+
+            if snap == last_snap:
+                stable += 1
+            else:
+                if last_snap is not None:
+                    self._log_info(
+                        '学时数据仍在变化 round=%s prev=%s now=%s',
+                        round_idx, last_snap, snap,
+                    )
+                stable = 1
+                last_snap = snap
+
+            need_stable = (
+                PROGRESS_ZERO_STABLE_ROUNDS
+                if self._is_all_zero_progress(snap)
+                else PROGRESS_STABLE_ROUNDS
+            )
+            elapsed = time.time() - started
+            self._log_info(
+                '学时数据采样 round=%s stable=%s/%s elapsed=%.1fs snap=%s',
+                round_idx, stable, need_stable, elapsed, snap,
+            )
+            if stable >= need_stable and elapsed >= PROGRESS_MIN_WAIT_SECONDS:
+                self._log_info('学时数据已稳定 elapsed=%.1fs snap=%s', elapsed, snap)
+                return
+            time.sleep(PROGRESS_STABLE_INTERVAL)
+
+        self._log_warning(
+            '等待学时数据稳定超时 %ss last_snap=%s stable=%s',
+            PROGRESS_WAIT_MAX_SECONDS, last_snap, stable,
+        )
+
+    @staticmethod
+    def _is_all_zero_progress(snap: tuple) -> bool:
+        """总认定与已采样课卡均为 0 时，更可能是接口未返回的占位值。"""
+        if not snap or len(snap) < 3:
+            return True
+        total_accredited, _required, courses = snap[0], snap[1], snap[2]
+        if float(total_accredited) > 0:
+            return False
+        for part in courses or ():
+            # (title, learned, accredited, required) 或 (title, None)
+            if len(part) >= 3 and part[1] is not None:
+                if float(part[1]) > 0 or float(part[2]) > 0:
+                    return False
+        return True
+
+    def _progress_snapshot(self) -> tuple | None:
+        """采样当前总进度 + 配置课表前几门认定值；任一关键字段缺失则返回 None。"""
+        hours = self._read_training_hours_from_dom()
+        if hours is None:
+            hours = self._read_training_hours_from_text()
+        if hours is None:
+            return None
+
+        course_parts: list[tuple] = []
+        titles = [str(c.get('title') or '').strip() for c in self.course_list if c.get('title')]
+        # 至少要能解析一门课的认定文案，否则说明课卡进度区还没灌数
+        body = self._training_page_text()
+        parsed_any = False
+        for title in titles[:5]:
+            progress = self._parse_course_progress_from_body(body, title)
+            if progress is None:
+                course_parts.append((title, None))
+                continue
+            parsed_any = True
+            course_parts.append((
+                title,
+                round(progress['learned'], 2),
+                round(progress['accredited'], 2),
+                round(progress['required'], 2),
+            ))
+
+        if titles and not parsed_any:
+            return None
+
+        return (
+            round(hours[0], 2),
+            round(hours[1], 2),
+            tuple(course_parts),
+        )
+
+    @staticmethod
+    def _parse_course_progress_from_body(body: str, title: str) -> dict[str, float] | None:
+        """从专题页正文一次性解析单课进度（不做重试）。"""
+        title = (title or '').strip()
+        if not title or not body:
+            return None
+        idx = body.find(title)
+        if idx < 0:
+            return None
+        window = body[idx:idx + COURSE_CREDIT_SCAN_CHARS]
+        credit_m = COURSE_CREDIT_PATTERN.search(window)
+        if not credit_m:
+            return None
+        try:
+            accredited = float(credit_m.group(1))
+            required = float(credit_m.group(2))
+        except (TypeError, ValueError):
+            return None
+        learned = accredited
+        learned_m = COURSE_LEARNED_PATTERN.search(window)
+        if learned_m:
+            try:
+                learned = float(learned_m.group(1))
+            except (TypeError, ValueError):
+                pass
+        return {
+            'learned': learned,
+            'accredited': accredited,
+            'required': required,
+        }
 
     def _read_training_hours(self) -> tuple[float, float]:
         """从专题页解析 (当前已认定学时, 要求认定学时)。
@@ -580,53 +726,26 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
         last_reason = ''
         for attempt in range(1, COURSE_PROGRESS_RETRY + 1):
             body = self._training_page_text()
-            idx = body.find(title)
-            if idx < 0:
+            if title not in body:
                 last_reason = '未找到课程标题'
-                self._log_info(
-                    '读课程进度等待中 %s attempt=%s/%s reason=%s',
-                    title, attempt, COURSE_PROGRESS_RETRY, last_reason,
-                )
-                if attempt < COURSE_PROGRESS_RETRY:
-                    time.sleep(COURSE_PROGRESS_RETRY_INTERVAL)
-                continue
-
-            window = body[idx:idx + COURSE_CREDIT_SCAN_CHARS]
-            credit_m = COURSE_CREDIT_PATTERN.search(window)
-            if not credit_m:
+            else:
+                progress = self._parse_course_progress_from_body(body, title)
+                if progress is not None:
+                    if attempt > 1:
+                        self._log_info(
+                            '读课程进度成功 %s attempt=%s 已学习=%s 已认定=%s / 认定=%s',
+                            title, attempt,
+                            progress['learned'], progress['accredited'], progress['required'],
+                        )
+                    return progress
                 last_reason = '未解析到认定学时'
-                self._log_info(
-                    '读课程进度等待中 %s attempt=%s/%s reason=%s',
-                    title, attempt, COURSE_PROGRESS_RETRY, last_reason,
-                )
-                if attempt < COURSE_PROGRESS_RETRY:
-                    time.sleep(COURSE_PROGRESS_RETRY_INTERVAL)
-                continue
 
-            try:
-                accredited = float(credit_m.group(1))
-                required = float(credit_m.group(2))
-            except (TypeError, ValueError):
-                return None
-
-            learned = accredited
-            learned_m = COURSE_LEARNED_PATTERN.search(window)
-            if learned_m:
-                try:
-                    learned = float(learned_m.group(1))
-                except (TypeError, ValueError):
-                    pass
-
-            if attempt > 1:
-                self._log_info(
-                    '读课程进度成功 %s attempt=%s 已学习=%s 已认定=%s / 认定=%s',
-                    title, attempt, learned, accredited, required,
-                )
-            return {
-                'learned': learned,
-                'accredited': accredited,
-                'required': required,
-            }
+            self._log_info(
+                '读课程进度等待中 %s attempt=%s/%s reason=%s',
+                title, attempt, COURSE_PROGRESS_RETRY, last_reason,
+            )
+            if attempt < COURSE_PROGRESS_RETRY:
+                time.sleep(COURSE_PROGRESS_RETRY_INTERVAL)
 
         self._log_warning(
             '专题页无法读学时进度: %s reason=%s retries=%s',
@@ -840,6 +959,97 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                 self._log_info('已点击控制条播放')
         except TimeoutException:
             self._log_warning('未找到控制条')
+        self._set_playback_rate_2x()
+
+    def _set_playback_rate_2x(self):
+        """主动设置 2 倍速：优先点 Playback Rate，失败则 JS 设 playbackRate=2。"""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+
+        try:
+            rate_btn = WebDriverWait(self.driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[@title='Playback Rate']"))
+            )
+            for _ in range(3):
+                rate_btn.click()
+                time.sleep(0.2)
+            self._log_info('已尝试点击设置 2 倍速')
+        except Exception:
+            self._log_warning('未点到 Playback Rate，改用 JS 设置倍速')
+
+        try:
+            ok = self.driver.execute_script(
+                """
+                const v = document.querySelector('video#vjs_video_1_html5_api, video.vjs-tech, video');
+                if (!v) return false;
+                v.playbackRate = 2;
+                if (v.paused) { v.play().catch(() => {}); }
+                return true;
+                """
+            )
+            if ok:
+                self._log_info('已通过 JS 设置 video.playbackRate=2')
+            else:
+                self._log_warning('设置 2 倍速失败：未找到 video')
+        except Exception:
+            self._log_warning('设置 2 倍速失败')
+
+    def _dismiss_speed_warning_dialog(self) -> bool:
+        """关闭「系统检测到倍速播放…」类弹窗，点「知道了」。"""
+        from selenium.webdriver.common.by import By
+
+        try:
+            body = ''
+            try:
+                body = (self.driver.find_element(By.TAG_NAME, 'body').text or '')
+            except Exception:
+                body = self.driver.page_source or ''
+            if not any(k in body for k in SPEED_WARNING_KEYWORDS):
+                return False
+
+            for xpath in (
+                "//button[normalize-space()='知道了' or .//span[normalize-space()='知道了']]",
+                "//button[normalize-space()='我知道了' or .//span[normalize-space()='我知道了']]",
+                "//*[self::button or self::a][contains(normalize-space(),'知道了')]",
+            ):
+                btns = self.driver.find_elements(By.XPATH, xpath)
+                for btn in btns:
+                    if not btn.is_displayed():
+                        continue
+                    try:
+                        btn.click()
+                    except Exception:
+                        self.driver.execute_script('arguments[0].click();', btn)
+                    self._log_info('已关闭倍速检测弹窗')
+                    time.sleep(0.5)
+                    # 关弹窗后续播，并再次主动设 2 倍速
+                    self._set_playback_rate_2x()
+                    return True
+            self._log_warning('检测到倍速弹窗文案，但未点到「知道了」按钮')
+        except Exception:
+            self._log_exception('关闭倍速弹窗失败')
+        return False
+
+    def _reopen_current_play_page(self) -> bool:
+        """进度卡住时：刷新当前播放页，重新点未完成小节并开始播放。"""
+        try:
+            url = (self.driver.current_url or '').strip()
+            if not url:
+                return False
+            self._log_warning('进度长时间无变化，重新打开播放页 url=%s', url)
+            self._driver_get(url, label='播放页重开')
+            time.sleep(5)
+            self._dismiss_speed_warning_dialog()
+            self._expand_course_catalog()
+            if not self._click_first_unfinished_resource():
+                self._log_warning('重开后未找到未完成小节')
+                return False
+            self._start_video_playback()
+            return True
+        except Exception:
+            self._log_exception('重新打开播放页失败')
+            return False
 
     def _read_video_progress(self) -> dict | None:
         """读取 Video.js 播放器进度（#vjs_video_1_html5_api / video.vjs-tech）。"""
@@ -852,7 +1062,8 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                     currentTime: v.currentTime || 0,
                     duration: v.duration || 0,
                     paused: !!v.paused,
-                    ended: !!v.ended
+                    ended: !!v.ended,
+                    playbackRate: v.playbackRate || 1
                 };
                 """
             )
@@ -863,11 +1074,16 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             return None
 
     def _wait_video_finished(self) -> bool:
-        """轮询等待「再学一遍」出现。"""
+        """轮询等待「再学一遍」；进度多次不动则关倍速弹窗并重开页面续播。"""
         from selenium.webdriver.common.by import By
 
         elapsed = 0
+        last_time = -1.0
+        stuck_rounds = 0
+        reopen_count = 0
         while elapsed < VIDEO_MAX_WAIT_SECONDS and self.is_running and not self._stopped:
+            self._dismiss_speed_warning_dialog()
+
             try:
                 els = self.driver.find_elements(
                     By.XPATH,
@@ -879,12 +1095,14 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
             except Exception:
                 pass
 
-            # 暂停则尝试继续播，并打印当前视频进度
+            # 暂停则继续播，并保持 2 倍速
             try:
                 self.driver.execute_script(
                     """
                     const v = document.querySelector('video#vjs_video_1_html5_api, video.vjs-tech, video');
-                    if (v && v.paused) v.play();
+                    if (!v) return;
+                    if (!v.playbackRate || v.playbackRate < 1.9) v.playbackRate = 2;
+                    if (v.paused) v.play().catch(() => {});
                     """
                 )
             except Exception:
@@ -895,17 +1113,60 @@ class ZxzhTaskRunner(SeleniumTaskRunner):
                 cur = float(info.get('currentTime') or 0)
                 dur = float(info.get('duration') or 0)
                 pct = (cur / dur * 100) if dur > 0 else 0.0
+                rate = float(info.get('playbackRate') or 1)
                 self._log_info(
-                    '视频进度 %.1f%% (%s/%s) paused=%s ended=%s 已等待 %ss',
+                    '视频进度 %.1f%% (%s/%s) paused=%s ended=%s rate=%sx 已等待 %ss stuck=%s/%s',
                     pct,
                     self._format_seconds(cur),
                     self._format_seconds(dur) if dur > 0 else '?',
                     info.get('paused'),
                     info.get('ended'),
+                    rate,
                     elapsed,
+                    stuck_rounds,
+                    VIDEO_STUCK_ROUNDS,
                 )
+                if last_time >= 0 and abs(cur - last_time) < VIDEO_STUCK_EPS_SECONDS:
+                    stuck_rounds += 1
+                else:
+                    stuck_rounds = 0
+                last_time = cur
+
+                if stuck_rounds >= VIDEO_STUCK_ROUNDS:
+                    if reopen_count >= VIDEO_REOPEN_MAX:
+                        self._log_warning(
+                            '进度卡住且重开次数已达上限 %s，结束本节等待',
+                            VIDEO_REOPEN_MAX,
+                        )
+                        return False
+                    reopen_count += 1
+                    self._log_warning(
+                        '进度连续 %s 轮无变化，准备重开播放页 reopen=%s/%s',
+                        stuck_rounds, reopen_count, VIDEO_REOPEN_MAX,
+                    )
+                    if self._reopen_current_play_page():
+                        stuck_rounds = 0
+                        last_time = -1.0
+                        elapsed = 0
+                        continue
+                    self._log_warning('重开播放页失败')
+                    return False
             else:
-                self._log_info('播放中… 未读到 video 元素，已等待 %s 秒', elapsed)
+                stuck_rounds += 1
+                self._log_info(
+                    '播放中… 未读到 video 元素，已等待 %s 秒 stuck=%s/%s',
+                    elapsed, stuck_rounds, VIDEO_STUCK_ROUNDS,
+                )
+                if stuck_rounds >= VIDEO_STUCK_ROUNDS:
+                    if reopen_count >= VIDEO_REOPEN_MAX:
+                        return False
+                    reopen_count += 1
+                    if self._reopen_current_play_page():
+                        stuck_rounds = 0
+                        last_time = -1.0
+                        elapsed = 0
+                        continue
+                    return False
 
             time.sleep(VIDEO_POLL_SECONDS)
             elapsed += VIDEO_POLL_SECONDS

@@ -18,6 +18,32 @@ from services.task_runner import register_runner
 
 GYGX_HOME_URL = 'https://www.gysjxjy.com:90/'
 GYGX_MY_URL = 'https://www.gysjxjy.com:90/my'
+PERCENT_PATTERN = re.compile(r'(\d+(?:\.\d+)?)\s*%')
+
+
+def extract_progress_percent(text: str):
+    """从课表行文案解析最后一个百分数，例如 35.5%。"""
+    matches = PERCENT_PATTERN.findall(text or '')
+    if not matches:
+        return None
+    try:
+        return float(matches[-1])
+    except ValueError:
+        return None
+
+
+def summarize_course_progress(row_texts: list[str]) -> tuple[int, int]:
+    """统计课包列表：已完成数 / 有效行总数。进度 ≥100% 视为完成。"""
+    total = 0
+    done = 0
+    for text in row_texts:
+        if not (text or '').strip():
+            continue
+        total += 1
+        percent = extract_progress_percent(text)
+        if percent is not None and percent >= 100:
+            done += 1
+    return done, total
 
 
 @register_runner('GYGX')
@@ -187,6 +213,7 @@ class GygxTaskRunner(SeleniumTaskRunner):
         self._wait_course_table(plan_id=plan_id, timeout=12)
 
         self.list_window = self.driver.current_window_handle
+        self._sync_course_list_progress()
         self._log_info('课包列表已打开 list_window=%s', self.list_window)
 
     def _click_plan_card_by_id(self, plan_id: str):
@@ -292,17 +319,43 @@ class GygxTaskRunner(SeleniumTaskRunner):
             self._log_warning('列表窗口丢失，重新打开课包')
             self._open_course_package()
 
+    def _iter_course_table_rows(self):
+        from selenium.webdriver.common.by import By
+
+        rows = []
+        try:
+            for row in self.driver.find_elements(By.CSS_SELECTOR, '.el-table__body tr'):
+                text = (row.text or '').strip()
+                if not text:
+                    continue
+                rows.append(row)
+        except Exception:
+            self._log_exception('读取课包表格失败')
+        return rows
+
+    def _sync_course_list_progress(self):
+        """把课包列表已完成数/总数写回任务 progress。"""
+        try:
+            row_texts = [(row.text or '').strip() for row in self._iter_course_table_rows()]
+            done, total = summarize_course_progress(row_texts)
+            if total <= 0:
+                self._log_warning('课包列表为空，跳过进度回写')
+                return
+            self._update_task_progress(f'{done}/{total}')
+            self._log_info('课表进度已回写 已完成=%s/%s', done, total)
+        except Exception:
+            self._log_exception('回写课包进度失败')
+
     def _find_first_unfinished_study_link(self):
         """返回 (课程名, 进度文本, 去学习元素) 或 None。"""
         from selenium.webdriver.common.by import By
 
         try:
-            rows = self.driver.find_elements(By.CSS_SELECTOR, '.el-table__body tr')
+            rows = self._iter_course_table_rows()
+            self._sync_course_list_progress()
             for row in rows:
                 text = (row.text or '').strip()
-                if not text:
-                    continue
-                progress = self._extract_progress_percent(text)
+                progress = extract_progress_percent(text)
                 self._log_info('课表行: %s | 解析进度=%s', text.replace('\n', ' / '), progress)
                 if progress is not None and progress >= 100:
                     continue
@@ -317,16 +370,6 @@ class GygxTaskRunner(SeleniumTaskRunner):
         except Exception:
             self._log_exception('查找未完成课件失败')
         return None
-
-    def _extract_progress_percent(self, text: str):
-        # 匹配 100% / 35.5% / 进度相关数字
-        matches = re.findall(r'(\d+(?:\.\d+)?)\s*%', text or '')
-        if not matches:
-            return None
-        try:
-            return float(matches[-1])
-        except ValueError:
-            return None
 
     def _wait_new_window(self, before_handles: set, timeout=20):
         end = time.time() + timeout
@@ -375,7 +418,7 @@ class GygxTaskRunner(SeleniumTaskRunner):
             for el in infos:
                 if not el.is_displayed():
                     continue
-                p = self._extract_progress_percent(el.text or '')
+                p = extract_progress_percent(el.text or '')
                 if p is not None:
                     return p
         except Exception:
@@ -469,6 +512,7 @@ class GygxTaskRunner(SeleniumTaskRunner):
             element.click()
             self._log_info('已点击查询刷新进度')
             time.sleep(2)
+            self._sync_course_list_progress()
             return
         except Exception:
             self._log_warning('未找到查询按钮，尝试重新打开课包')

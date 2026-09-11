@@ -17,6 +17,11 @@ from services.task_runner import register_runner, update_task_fields
 
 SCGB_HOME_URL = 'https://web.scgb.gov.cn/#/index'
 SCGB_API_BASE = 'https://api.scgb.gov.cn/api/services/app'
+# 两次检测间播放器进度至少推进这么多秒，才视为「视频仍在播」
+VIDEO_PROGRESS_EPS = 2.0
+# 接口 watchTimes 停滞轮次达到此值才考虑刷新；播放器仍在走时不计入
+WATCH_TIMES_STALE_ROUNDS = 3
+STALE_RELOAD_MAX = 3
 
 
 @register_runner('SCGB')
@@ -33,6 +38,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
         self._last_watch_times = None
         self._watch_times_stale_rounds = 0
         self._stale_reload_count = 0
+        self._last_video_time = None
         self._auth_expired = False
         self._auth_fail_rounds = 0
         self._api_network_error = False
@@ -285,25 +291,36 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                     continue
                 null_course_rounds = 0
 
-                # watchTimes 多轮不变：先强制刷新当前课续播，禁止误开「同一门未完成课」空转
-                if self._watch_times_stale_rounds >= 2:
-                    self._stale_reload_count += 1
-                    if self._stale_reload_count >= 3:
-                        self._log_warning(
-                            '课程 %s 多次刷新仍无进度，跳过并切换下一门',
+                # watchTimes 多轮不变：仅当播放器进度也停滞时才刷新/跳过
+                # （长视频接口常延迟上报，仅看 watchTimes 会误入不播放列表）
+                if self._watch_times_stale_rounds >= WATCH_TIMES_STALE_ROUNDS:
+                    if self._video_still_progressing():
+                        self._log_info(
+                            '课程 %s 接口 watchTimes 未变，但播放器进度仍在增加，不刷新/不跳过',
                             self.current_course_id,
                         )
-                        self._skip_stuck_course(self.current_course_id)
-                        sleep_time = 20
+                        self._watch_times_stale_rounds = 0
+                        self._stale_reload_count = 0
                     else:
-                        self._log_warning(
-                            '课程 %s 进度停滞，强制刷新当前课续播 (%s/3)',
-                            self.current_course_id,
-                            self._stale_reload_count,
-                        )
-                        self._reload_current_course()
-                        sleep_time = 30
-                    continue
+                        self._stale_reload_count += 1
+                        if self._stale_reload_count >= STALE_RELOAD_MAX:
+                            self._log_warning(
+                                '课程 %s 接口与播放器均无进度，多次刷新无效，跳过并切换下一门',
+                                self.current_course_id,
+                            )
+                            self._skip_stuck_course(self.current_course_id)
+                            sleep_time = 20
+                        else:
+                            self._log_warning(
+                                '课程 %s 接口与播放器均停滞，强制刷新当前课续播 (%s/%s)',
+                                self.current_course_id,
+                                self._stale_reload_count,
+                                STALE_RELOAD_MAX,
+                            )
+                            self._reload_current_course()
+                            sleep_time = 30
+                        time.sleep(sleep_time)
+                        continue
 
                 detail = self._fetch_course_detail(self.current_course_id)
                 if self._auth_expired:
@@ -340,23 +357,36 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                     self._auth_fail_rounds = 0
                     watched = int(detail['watchTimes'])
                     remain = int(detail['totalPeriod']) - watched
-                    # 上限 600s：接口常按整点上报，过长睡眠会误判停滞且难以及时点播放
+                    # 上限 600s：接口常延迟上报；过长睡眠难以及时点播放
                     sleep_time = max(30, min(remain, 600))
+                    ended = self._ensure_video_playing()
+                    video_info = self._read_video_progress()
+                    video_moving = self._update_video_progress_tracker(video_info)
+
                     if self._last_watch_times == watched:
-                        self._watch_times_stale_rounds += 1
+                        if video_moving:
+                            # 接口未更新但本地在播：清停滞计数，避免长视频误跳过
+                            if self._watch_times_stale_rounds > 0:
+                                self._log_info(
+                                    '课程 %s 接口 watchTimes=%s 未变，播放器仍在推进，重置停滞计数',
+                                    self.current_course_id, watched,
+                                )
+                            self._watch_times_stale_rounds = 0
+                            self._stale_reload_count = 0
+                        else:
+                            self._watch_times_stale_rounds += 1
                     else:
                         self._last_watch_times = watched
                         self._watch_times_stale_rounds = 0
                         self._stale_reload_count = 0
-                    ended = self._ensure_video_playing()
-                    video_info = self._read_video_progress()
+
                     if video_info:
                         cur = float(video_info.get('currentTime') or 0)
                         dur = float(video_info.get('duration') or 0)
                         pct = (cur / dur * 100) if dur > 0 else 0.0
                         self._log_info(
                             '课程 %s 视频进度 %.1f%% (%s/%s) paused=%s ended=%s '
-                            'api_watched=%s/%s stale=%s 下次检测=%ss',
+                            'api_watched=%s/%s video_moving=%s stale=%s 下次检测=%ss',
                             self.current_course_id,
                             pct,
                             self._format_seconds(cur),
@@ -365,6 +395,7 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                             video_info.get('ended'),
                             detail['watchTimes'],
                             detail['totalPeriod'],
+                            video_moving,
                             self._watch_times_stale_rounds,
                             sleep_time,
                         )
@@ -379,8 +410,8 @@ class ScgbTaskRunner(SeleniumTaskRunner):
                         )
                     if ended:
                         sleep_time = min(sleep_time, 30)
-                    elif self._watch_times_stale_rounds > 0:
-                        # 已出现停滞迹象，缩短间隔以便尽快点播/刷新
+                    elif self._watch_times_stale_rounds > 0 and not video_moving:
+                        # 接口与播放器都停滞，缩短间隔以便尽快点播/刷新
                         sleep_time = min(sleep_time, 120)
             except Exception as exc:
                 if self._is_session_dead_error(exc) or not self._is_browser_alive():
@@ -735,6 +766,38 @@ class ScgbTaskRunner(SeleniumTaskRunner):
     def _reset_progress_tracker(self):
         self._last_watch_times = None
         self._watch_times_stale_rounds = 0
+        self._last_video_time = None
+
+    def _update_video_progress_tracker(self, video_info: dict | None) -> bool:
+        """根据播放器 currentTime 更新跟踪值；返回相对上次是否明显推进。"""
+        if not video_info:
+            return False
+        try:
+            cur = float(video_info.get('currentTime') or 0)
+        except (TypeError, ValueError):
+            return False
+        last = self._last_video_time
+        moving = last is not None and cur > last + VIDEO_PROGRESS_EPS
+        self._last_video_time = cur
+        return moving
+
+    def _video_still_progressing(self) -> bool:
+        """决策刷新/跳过前再读一次播放器：仍在推进则不算卡住。"""
+        info = self._read_video_progress()
+        if not info:
+            return False
+        try:
+            cur = float(info.get('currentTime') or 0)
+        except (TypeError, ValueError):
+            return False
+        last = self._last_video_time
+        if last is not None and cur > last + VIDEO_PROGRESS_EPS:
+            self._last_video_time = cur
+            return True
+        # 即便未超过阈值，也刷新快照，避免长期用过旧 last
+        if last is None:
+            self._last_video_time = cur
+        return False
 
     @staticmethod
     def _is_session_dead_error(exc) -> bool:
