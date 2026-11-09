@@ -5,6 +5,7 @@ import logging
 import threading
 import time
 
+from services.browser_data_cleanup import CLEANUP_HOUR, CLEANUP_MINUTE, cleanup_browser_data
 from services.scheduler_config import get_scheduler_config, parse_hhmm
 from services.task_runner import get_running_task_count, is_task_running, start_task
 
@@ -250,6 +251,22 @@ def _job_scan(schedule_type: str):
         logger.exception('定时任务执行失败 type=%s', schedule_type)
 
 
+def _job_browser_data_cleanup():
+    try:
+        summary = cleanup_browser_data()
+        logger.info(
+            '浏览器数据清理完成 scanned=%s deleted=%s kept_recent=%s kept_in_use=%s failed=%s message=%s',
+            summary.get('scanned'),
+            summary.get('deleted'),
+            summary.get('kept_recent'),
+            summary.get('kept_in_use'),
+            summary.get('failed'),
+            summary.get('message'),
+        )
+    except Exception:
+        logger.exception('浏览器数据清理失败')
+
+
 def reschedule_jobs(app=None):
     """按当前配置重建 APScheduler jobs。"""
     global _SCHEDULER, _APP
@@ -296,9 +313,18 @@ def reschedule_jobs(app=None):
             id='schedule_monthly',
             replace_existing=True,
         )
+        _SCHEDULER.add_job(
+            _job_browser_data_cleanup,
+            CronTrigger(hour=CLEANUP_HOUR, minute=CLEANUP_MINUTE),
+            id='browser_data_cleanup',
+            replace_existing=True,
+            misfire_grace_time=6 * 3600,
+        )
         logger.info(
-            '调度任务已注册 daily=%02d:%02d monthly=day%s %02d:%02d max=%s',
+            '调度任务已注册 daily=%02d:%02d monthly=day%s %02d:%02d '
+            'browser_data_cleanup=%02d:%02d max=%s',
             daily_h, daily_m, monthly_day, monthly_h, monthly_m,
+            CLEANUP_HOUR, CLEANUP_MINUTE,
             cfg.get('max_running_tasks'),
         )
 
@@ -308,3 +334,9 @@ def init_scheduler(app):
     global _APP
     _APP = app
     reschedule_jobs(app)
+    # 进程若只在白天运行，凌晨定时点不会触发，启动时补清一次
+    threading.Thread(
+        target=_job_browser_data_cleanup,
+        daemon=True,
+        name='browser-data-cleanup-startup',
+    ).start()

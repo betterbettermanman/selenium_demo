@@ -24,6 +24,12 @@ def is_website_browser_open(website_id: int) -> bool:
         return False
 
 
+def list_open_website_ids() -> list[int]:
+    with _lock:
+        ids = list(_browsers.keys())
+    return [website_id for website_id in ids if is_website_browser_open(website_id)]
+
+
 def open_website_browser(website) -> tuple[bool, str]:
     url = (website.url or '').strip()
     if not url:

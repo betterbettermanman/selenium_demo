@@ -28,6 +28,21 @@ SCGX_LOGIN_URL = 'https://www.sedu.net/student/#/login'
 SCGX_CENTER_URL = 'https://www.sedu.net/student/#/center'
 SCGX_OUR_COURSE_URL = 'https://www.sedu.net/student/#/our-course'
 SCGX_BASE_URL = 'https://www.sedu.net/student/'
+# 学员端课表、公需详情都在这个站点；真正播放页是详情里「去学习」新开的 pcStudyUrl
+SCGX_STUDENT_PORTAL = 'sedu.net/student'
+SCGX_DONE_PAGE_KEYWORDS = ('已学完', '学习完成', '已完成学习')
+
+
+def lesson_percent_done(progress_text: str) -> bool:
+    """小节进度文案达到 100% 视为该小节已完成。"""
+    match = re.search(r'(\d+(?:\.\d+)?)\s*%', progress_text or '')
+    if not match:
+        return False
+    return float(match.group(1)) >= 100
+
+
+def is_student_portal(url: str) -> bool:
+    return SCGX_STUDENT_PORTAL in (url or '')
 
 
 @register_runner('SCGX')
@@ -583,10 +598,73 @@ class ScgxTaskRunner(SeleniumTaskRunner):
         new_ones = after - before
         if new_ones:
             self.driver.switch_to.window(next(iter(new_ones)))
-            self._log_info('已切换到学习页')
+            self._log_info('已切换到学习页 url=%s', self.driver.current_url)
+        elif 'gxkm-detail' in (self.driver.current_url or ''):
+            self._log_info('进入公需科目详情 url=%s', self.driver.current_url)
+            self._enter_gxkm_lesson()
+        else:
+            self._log_info('点击去学习后仍在当前页 url=%s', self.driver.current_url)
 
         self._last_list_refresh = time.time()
         self._try_start_video()
+
+    def _enter_gxkm_lesson(self) -> bool:
+        """公需详情页点未完成小节的「去学习」，进入新开的播放页。"""
+        from selenium.webdriver.common.by import By
+
+        if 'gxkm-detail' not in (self.driver.current_url or ''):
+            return False
+
+        cards = self.driver.find_elements(By.CSS_SELECTOR, '.km-detail .items')
+        if not cards:
+            self._log_warning('公需详情未找到小节卡片')
+            return False
+
+        for card in cards:
+            try:
+                if not card.is_displayed():
+                    continue
+            except Exception:
+                continue
+            progress = ''
+            title = ''
+            try:
+                progress = (card.find_element(By.CSS_SELECTOR, '.progress').text or '').strip()
+            except Exception:
+                progress = ''
+            try:
+                title = (card.find_element(By.CSS_SELECTOR, '.title').text or '').strip()
+            except Exception:
+                title = ''
+            if lesson_percent_done(progress):
+                self._log_info('小节已完成，跳过: %s | %s', title, progress)
+                continue
+
+            target = None
+            for link in card.find_elements(By.TAG_NAME, 'a'):
+                if '去学习' in (link.text or ''):
+                    target = link
+                    break
+            if target is None:
+                continue
+
+            self._log_info('打开小节播放: %s | %s', title, progress)
+            before = set(self.driver.window_handles)
+            try:
+                target.click()
+            except Exception:
+                self.driver.execute_script('arguments[0].click();', target)
+            time.sleep(3)
+            new_ones = set(self.driver.window_handles) - before
+            if not new_ones:
+                self._log_warning('点击去学习未打开播放页: %s', title)
+                return False
+            self.driver.switch_to.window(next(iter(new_ones)))
+            self._log_info('已切换到播放页 url=%s', self.driver.current_url)
+            return True
+
+        self._log_info('公需详情页没有未完成小节')
+        return False
 
     def _try_start_video(self):
         try:
@@ -642,14 +720,32 @@ class ScgxTaskRunner(SeleniumTaskRunner):
 
                 self._try_start_video()
 
+                url = ''
+                try:
+                    url = self.driver.current_url or ''
+                except Exception:
+                    url = ''
+
+                # 课表和公需详情都在学员端。详情页类目状态、已学小节会带「已学完」等字，
+                # 不能据此把整门科目判完成。播放完成只认新开的播放页。
+                if is_student_portal(url):
+                    if 'gxkm-detail' in url and self._enter_gxkm_lesson():
+                        self._try_start_video()
+                    elif time.time() - self._last_list_refresh >= 180:
+                        self._log_info('定时刷新课表')
+                        self._spawn_open_home()
+                    time.sleep(30)
+                    continue
+
                 page_text = ''
                 try:
                     page_text = self.driver.find_element(By.TAG_NAME, 'body').text or ''
                 except Exception:
                     pass
 
-                if any(k in page_text for k in ('已学完', '学习完成', '已完成学习')):
-                    self._log_info('检测到课程完成标记，更新播放状态')
+                matched = next((k for k in SCGX_DONE_PAGE_KEYWORDS if k in page_text), '')
+                if matched:
+                    self._log_info('检测到课程完成标记 keyword=%s url=%s', matched, url)
                     self._on_current_course_finished()
                     time.sleep(30)
                     continue

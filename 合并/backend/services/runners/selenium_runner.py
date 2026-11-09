@@ -200,14 +200,20 @@ class SeleniumTaskRunner(BaseTaskRunner):
             self._log_error('检测页面错误异常: %s', exc)
             return True
 
+    def _new_ddddocr(self, **kwargs):
+        """Flask 后台线程里 stdout 无法 print 中文，ddddocr 默认广告会直接抛 OSError。"""
+        import ddddocr
+
+        kwargs.setdefault('show_ad', False)
+        return ddddocr.DdddOcr(**kwargs)
+
     def _recognize_captcha_screenshot(self, element, filename: str) -> str:
         os.makedirs('png', exist_ok=True)
         save_path = os.path.join('png', filename)
         if not element.screenshot(save_path):
             return ''
         try:
-            import ddddocr
-            ocr = ddddocr.DdddOcr()
+            ocr = self._new_ddddocr()
             with open(save_path, 'rb') as f:
                 return ocr.classification(f.read())
         except ImportError:
