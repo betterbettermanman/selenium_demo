@@ -617,4 +617,4 @@ png/
 /合并/backend/driver_cache/chromedriver/155.0.8059.39/chromedriver-win64/THIRD_PARTY_NOTICES.chromedriver
 /合并/backend/driver_cache/chromedriver/157.0.8103.38/chromedriver-win64/LICENSE.chromedriver
 /合并/backend/driver_cache/chromedriver/157.0.8103.38/chromedriver-win64/THIRD_PARTY_NOTICES.chromedriver
-/合并/backend/driver_cache/
+/合并/backend/driver_cache/**
