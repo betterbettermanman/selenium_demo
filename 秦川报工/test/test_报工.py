@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -14,6 +15,7 @@ if HERE not in sys.path:
 driver_manager = importlib.import_module("chromedriver_manager")
 报工 = importlib.import_module("直接报工")
 新增任务 = importlib.import_module("新增任务_排产_报工")
+生成任务 = importlib.import_module("生成任务")
 
 
 class CreateDriverTest(unittest.TestCase):
@@ -133,11 +135,166 @@ class ChromeDriverManagerTest(unittest.TestCase):
 
 
 class TemplateConfigTest(unittest.TestCase):
+    NON_DEVELOPMENT_TEXT = """【任务名称】：生产数据核对
+工作类别：数据核对
+工作场景：订单数据差异核对
+工作内容及边界：核对指定范围的订单数据，不包含数据修正
+交付内容：数据核对结论和差异清单
+交付方式：两者结合
+交付要求：描述记录核对范围和结论，附件提供差异清单
+评估标准（基线工时）：待确认"""
+
+    def build_non_development_task(self, responses):
+        grouped = {"前端": [], "后端": [{"subject": "核对生产订单数据", "files": []}]}
+        with mock.patch.multiple(
+            新增任务,
+            load_env=mock.DEFAULT,
+            call_llm=mock.DEFAULT,
+        ) as mocks:
+            mocks["load_env"].return_value = {"TASK_TEMPLATE": "非开发工作场景与交付要求填报说明.md"}
+            mocks["call_llm"].side_effect = responses
+            result = 新增任务.build_task(grouped, date(2026, 11, 3))
+        return result, mocks["call_llm"]
+
     def test_parent_template_is_inside_template_directory(self):
         expected = os.path.join(HERE, "template", "开发任务填报-父任务模版.md")
 
         self.assertEqual(新增任务.TEMPLATE_PATH, expected)
         self.assertTrue(os.path.isfile(expected))
+
+    def test_child_template_generates_child_task_content(self):
+        child_text = """【任务名称】：订单统计页面与接口
+【涉及端】：全栈
+订单统计：
+- 前端：实现订单统计页面
+- 后端：实现订单统计接口
+不做范围：
+- 无"""
+        parent_text = """【父任务名称】：旧父任务
+1. 需求背景
+旧内容
+2. 技术性描述
+旧内容"""
+        grouped = {"前端": [{"subject": "完成订单统计", "files": []}], "后端": []}
+        with mock.patch.multiple(
+            新增任务,
+            load_env=mock.DEFAULT,
+            call_llm=mock.DEFAULT,
+        ) as mocks:
+            mocks["load_env"].return_value = {"TASK_TEMPLATE": "开发任务填报-子任务模版.md"}
+            mocks["call_llm"].side_effect = [child_text, parent_text]
+
+            result = 新增任务.build_task(grouped, date(2026, 11, 3))
+
+        self.assertEqual(result["name"], "订单统计页面与接口")
+        self.assertIn("订单统计：", result["description"])
+        self.assertEqual(mocks["call_llm"].call_count, 1)
+
+    def test_non_development_template_generates_seven_field_task(self):
+        non_development_text = """【任务名称】：生产数据核对
+工作类别：数据核对
+工作场景：订单数据差异核对
+工作内容及边界：核对指定范围的订单数据，不包含数据修正
+交付内容：数据核对结论和差异清单
+交付方式：两者结合
+交付要求：描述记录核对范围和结论，附件提供差异清单
+评估标准（基线工时）：待确认"""
+        parent_text = """【父任务名称】：旧父任务
+1. 需求背景
+旧内容
+2. 技术性描述
+旧内容"""
+        grouped = {"前端": [], "后端": [{"subject": "核对生产订单数据", "files": []}]}
+        with mock.patch.multiple(
+            新增任务,
+            load_env=mock.DEFAULT,
+            call_llm=mock.DEFAULT,
+        ) as mocks:
+            mocks["load_env"].return_value = {"TASK_TEMPLATE": "非开发工作场景与交付要求填报说明.md"}
+            mocks["call_llm"].side_effect = [non_development_text, parent_text]
+
+            result = 新增任务.build_task(grouped, date(2026, 11, 3))
+
+        self.assertEqual(result["name"], "生产数据核对")
+        self.assertIn("工作类别：数据核对", result["description"])
+        self.assertIn("评估标准（基线工时）：待确认", result["description"])
+        self.assertEqual(mocks["call_llm"].call_count, 1)
+
+    def test_non_development_template_retries_when_field_value_is_empty(self):
+        invalid_text = self.NON_DEVELOPMENT_TEXT.replace(
+            "交付内容：数据核对结论和差异清单", "交付内容："
+        )
+
+        result, call_llm = self.build_non_development_task([
+            invalid_text,
+            self.NON_DEVELOPMENT_TEXT,
+        ])
+
+        self.assertEqual(call_llm.call_count, 2)
+        self.assertIn("交付内容：数据核对结论和差异清单", result["description"])
+
+    def test_non_development_template_rejects_invalid_delivery_method(self):
+        invalid_text = self.NON_DEVELOPMENT_TEXT.replace(
+            "交付方式：两者结合", "交付方式：口头说明"
+        )
+
+        result, call_llm = self.build_non_development_task([
+            invalid_text,
+            self.NON_DEVELOPMENT_TEXT,
+        ])
+
+        self.assertEqual(call_llm.call_count, 2)
+        self.assertIn("交付方式：两者结合", result["description"])
+
+    def test_non_development_baseline_is_pending_without_workhour_input(self):
+        response = self.NON_DEVELOPMENT_TEXT.replace("待确认", "8人时")
+
+        result, call_llm = self.build_non_development_task([response])
+
+        self.assertEqual(call_llm.call_count, 1)
+        self.assertIn("评估标准（基线工时）：待确认", result["description"])
+        self.assertNotIn("8人时", result["description"])
+
+    def test_unknown_template_is_rejected(self):
+        with mock.patch.object(
+            新增任务, "load_env", return_value={"TASK_TEMPLATE": "../其他模板.md"}
+        ):
+            with self.assertRaisesRegex(RuntimeError, "不支持的模板"):
+                新增任务.load_template()
+
+    def test_existing_task_recognizes_all_supported_templates(self):
+        descriptions = {
+            "父任务": "【父任务名称】：订单统计\n1. 需求背景\n背景\n2. 技术性描述\n方案",
+            "子任务": "【任务名称】：订单统计\n【涉及端】：全栈\n订单统计：\n- 前端：页面",
+            "非开发": (
+                "【任务名称】：生产数据核对\n工作类别：数据核对\n工作场景：订单数据差异核对\n"
+                "工作内容及边界：核对数据\n交付内容：核对结论\n交付方式：任务描述中写明即可\n"
+                "交付要求：记录结论\n评估标准（基线工时）：待确认"
+            ),
+        }
+        driver = mock.Mock()
+        with mock.patch.multiple(
+            新增任务,
+            USERNAME="tester",
+            WebDriverWait=mock.DEFAULT,
+            wait_project=mock.DEFAULT,
+        ):
+            for template_type, description in descriptions.items():
+                with self.subTest(template_type=template_type):
+                    driver.execute_async_script.return_value = [{
+                        "id": "task-1",
+                        "taskName": "订单统计",
+                        "createTime": "2026-11-03 10:00:00",
+                        "createBy": "tester",
+                        "parentTaskId": None,
+                        "schedulingStatus": "0",
+                        "description": description,
+                    }]
+
+                    result = 新增任务.find_today_task(driver, date(2026, 11, 3))
+
+                    self.assertIsNotNone(result)
+                    self.assertEqual(result["id"], "task-1")
 
 
 class RepositoryConfigTest(unittest.TestCase):
@@ -153,6 +310,121 @@ class RepositoryConfigTest(unittest.TestCase):
 
         self.assertEqual(result, {"前端": [], "后端": []})
         find_repos.assert_called_once_with(r"D:\repos")
+
+
+class TaskDateConfigTest(unittest.TestCase):
+    def test_target_day_reads_task_date_from_env(self):
+        with mock.patch.object(新增任务, "load_env", return_value={"TASK_DATE": "2026-11-03"}):
+            result = 新增任务.target_day()
+
+        self.assertEqual(result, date(2026, 11, 3))
+
+    def test_generate_task_uses_configured_date(self):
+        with mock.patch.multiple(
+            新增任务,
+            load_env=mock.DEFAULT,
+            collect_commits=mock.DEFAULT,
+            build_task=mock.DEFAULT,
+        ) as mocks:
+            mocks["load_env"].return_value = {"TASK_DATE": "2026-11-03"}
+            mocks["collect_commits"].return_value = {"前端": [], "后端": []}
+            mocks["build_task"].return_value = None
+
+            生成任务.main()
+
+        mocks["collect_commits"].assert_called_once_with(date(2026, 11, 3))
+
+
+class WorkflowDateTest(unittest.TestCase):
+    def test_main_passes_configured_date_to_scheduling_and_reporting(self):
+        grouped = {"前端": [], "后端": []}
+        with mock.patch.multiple(
+            新增任务,
+            load_env=mock.DEFAULT,
+            collect_commits=mock.DEFAULT,
+            create_driver=mock.DEFAULT,
+            login=mock.DEFAULT,
+            find_today_task=mock.DEFAULT,
+            build_work_description=mock.DEFAULT,
+            commit_ids=mock.DEFAULT,
+            schedule_task=mock.DEFAULT,
+            report_created_task=mock.DEFAULT,
+        ) as mocks:
+            mocks["load_env"].return_value = {"TASK_DATE": "2026-11-03"}
+            mocks["collect_commits"].return_value = grouped
+            mocks["find_today_task"].return_value = {"id": "task-1", "taskName": "订单统计"}
+            mocks["build_work_description"].return_value = "完成订单统计"
+            mocks["commit_ids"].return_value = "abc"
+            driver = mocks["create_driver"].return_value
+
+            新增任务.main([])
+
+        day = date(2026, 11, 3)
+        mocks["schedule_task"].assert_called_once_with(driver, "订单统计", day)
+        mocks["report_created_task"].assert_called_once_with(
+            driver, "订单统计", "完成订单统计", "abc", grouped, day
+        )
+
+    def test_schedule_task_uses_selected_date(self):
+        driver = mock.Mock()
+        driver.execute_async_script.return_value = {"ok": True}
+        with mock.patch.multiple(
+            新增任务,
+            WebDriverWait=mock.DEFAULT,
+            wait_project=mock.DEFAULT,
+            find_task_record=mock.DEFAULT,
+        ) as mocks:
+            mocks["find_task_record"].return_value = {"id": "task-1", "schedulingStatus": "0"}
+
+            新增任务.schedule_task(driver, "订单统计", date(2026, 11, 3))
+
+        plan = driver.execute_async_script.call_args.args[2]
+        self.assertEqual(plan, {
+            "start": "2026-11-03 08:30:00",
+            "end": "2026-11-07 17:30:00",
+        })
+
+    def test_report_created_task_uses_selected_date(self):
+        driver = mock.Mock()
+        driver.execute_async_script.return_value = False
+        driver.execute_script.side_effect = [
+            None,
+            {"id": "task-1", "taskName": "订单统计"},
+            {
+                "duration": 8,
+                "remaining": 0,
+                "description": "完成订单统计",
+                "commitId": "abc",
+                "isStorage": 1,
+                "finalOutputFlag": 1,
+                "documentVersion": "V20261103",
+            },
+        ]
+        with mock.patch.multiple(
+            新增任务,
+            WebDriverWait=mock.DEFAULT,
+            select_assignee_and_search=mock.DEFAULT,
+            render_commit_screenshot=mock.DEFAULT,
+            click_work_hour=mock.DEFAULT,
+            upload_output=mock.DEFAULT,
+        ) as mocks:
+            mocks["render_commit_screenshot"].return_value = "commits.png"
+
+            新增任务.report_created_task(
+                driver,
+                "订单统计",
+                "完成订单统计",
+                "abc",
+                {"前端": [], "后端": []},
+                date(2026, 11, 3),
+            )
+
+        self.assertEqual(driver.execute_async_script.call_args.args[2], "2026-11-03")
+        mocks["render_commit_screenshot"].assert_called_once_with(
+            driver, {"前端": [], "后端": []}, date(2026, 11, 3)
+        )
+        fill_arguments = driver.execute_script.call_args_list[2].args
+        self.assertEqual(fill_arguments[2:4], ("2026-11-03 08:30:00", "2026-11-03 17:30:00"))
 
 
 class WorkDescriptionTest(unittest.TestCase):

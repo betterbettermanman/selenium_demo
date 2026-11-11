@@ -1,4 +1,4 @@
-"""根据 296 仓库当天提交，调用大模型按开发任务模板生成任务并新增。"""
+"""根据 296 仓库指定日期的提交，调用大模型按开发任务模板生成任务并新增。"""
 
 import argparse
 import json
@@ -31,13 +31,38 @@ from 直接报工 import (
 from model_client import generate_text
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_PATH = os.path.join(HERE, "template", "开发任务填报-父任务模版.md")
+TEMPLATE_DIR = os.path.join(HERE, "template")
+DEFAULT_TEMPLATE = "开发任务填报-父任务模版.md"
+TEMPLATE_PATH = os.path.join(TEMPLATE_DIR, DEFAULT_TEMPLATE)
+TASK_TEMPLATES = {
+    "开发任务填报-父任务模版.md": {
+        "kind": "父任务",
+        "title": "父任务名称",
+        "required_fields": ("需求背景", "技术性描述"),
+    },
+    "开发任务填报-子任务模版.md": {
+        "kind": "子任务",
+        "title": "任务名称",
+        "required_fields": ("任务名称", "涉及端"),
+    },
+    "非开发工作场景与交付要求填报说明.md": {
+        "kind": "非开发任务",
+        "title": "任务名称",
+        "required_fields": (
+            "工作类别",
+            "工作场景",
+            "工作内容及边界",
+            "交付内容",
+            "交付方式",
+            "交付要求",
+            "评估标准（基线工时）",
+        ),
+    },
+}
 
 TASK_LIST_URL = "https://scic.cdqckj.com:65036/businessFlow/taskManagement/taskList"
 TASK_SCHEDULING_URL = "https://scic.cdqckj.com:65036/businessFlow/taskManagement/taskScheduling"
 TASK_EXECUTE_URL = "https://scic.cdqckj.com:65036/businessFlow/taskManagement/taskExecute"
-# 为空时取运行当天。格式 YYYY-MM-DD，用来补某一天的提交。
-TASK_DATE = ""
 TASK_CATEGORY = "development"
 WORK_DESCRIPTION_MAX_LENGTH = 60
 POSITION_BY_SCOPE = {
@@ -48,8 +73,9 @@ POSITION_BY_SCOPE = {
 
 
 def target_day():
-    if TASK_DATE.strip():
-        return datetime.strptime(TASK_DATE.strip(), "%Y-%m-%d").date()
+    configured_day = (load_env(ENV_PATH).get("TASK_DATE") or "").strip()
+    if configured_day:
+        return datetime.strptime(configured_day, "%Y-%m-%d").date()
     return datetime.now().date()
 
 
@@ -120,7 +146,7 @@ def collect_commits(day):
         side = side_of(repo)
         commits = read_commits(repo, day)
         repo_name = os.path.basename(repo)
-        log.info("%s %s 当天提交 %s 条", side, repo_name, len(commits))
+        log.info("%s %s %s提交 %s 条", side, repo_name,day, len(commits))
         for commit in commits:
             commit["repo"] = repo_name
             commit["side"] = side
@@ -142,24 +168,47 @@ def format_commits(grouped):
     return "\n".join(lines)
 
 
+def selected_template():
+    filename = (load_env(ENV_PATH).get("TASK_TEMPLATE") or "").strip() or DEFAULT_TEMPLATE
+    if filename not in TASK_TEMPLATES:
+        supported = "、".join(TASK_TEMPLATES)
+        raise RuntimeError(f"不支持的模板：{filename}，可选值：{supported}")
+    return filename
+
+
 def load_template():
-    with open(TEMPLATE_PATH, encoding="utf-8") as template_file:
+    filename = selected_template()
+    with open(os.path.join(TEMPLATE_DIR, filename), encoding="utf-8") as template_file:
         text = template_file.read().strip()
     marker = "填写示例"
     if marker in text:
         body, example = text.split(marker, 1)
-        return body.strip(), example.strip()
-    return text, ""
+        return body.strip(), example.strip(), filename
+    return text, "", filename
 
 
-def parse_task_text(text):
+def validate_non_development_fields(raw, required_fields):
+    values = {}
+    for field in required_fields:
+        matches = re.findall(rf"(?m)^{re.escape(field)}[ \t]*[：:][ \t]*(.*)$", raw)
+        if len(matches) != 1 or not matches[0].strip():
+            raise RuntimeError(f"非开发任务字段「{field}」必须恰好出现一次且内容不能为空")
+        values[field] = matches[0].strip()
+    if values["交付方式"] not in {"任务描述中写明即可", "需要额外附件", "两者结合"}:
+        raise RuntimeError("非开发任务字段「交付方式」的值不符合模板要求")
+
+
+def parse_task_text(text, template_filename=DEFAULT_TEMPLATE):
+    config = TASK_TEMPLATES[template_filename]
     raw = text.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1]
         raw = raw.rsplit("```", 1)[0].strip()
     raw = raw.split("填写示例", 1)[0].strip()
-    if "需求背景" not in raw or "技术性描述" not in raw:
-        raise RuntimeError(f"大模型没有按模板返回任务：{text}")
+    if config["kind"] == "非开发任务":
+        validate_non_development_fields(raw, config["required_fields"])
+    elif not all(field in raw for field in config["required_fields"]):
+        raise RuntimeError(f"大模型没有按{config['kind']}模板返回任务：{text}")
     lines = raw.splitlines()
     task_name = ""
     title_index = None
@@ -178,10 +227,11 @@ def parse_task_text(text):
         break
     if not task_name:
         raise RuntimeError(f"大模型没有按模板返回任务：{text}")
+    title = config["title"]
     if title_index is None:
-        lines.insert(0, f"【父任务名称】：{task_name}")
+        lines.insert(0, f"【{title}】：{task_name}")
     else:
-        lines[title_index] = f"【父任务名称】：{task_name}"
+        lines[title_index] = f"【{title}】：{task_name}"
     normalized = []
     for line in lines:
         stripped = line.strip()
@@ -189,7 +239,14 @@ def parse_task_text(text):
             normalized.append(stripped[1:-1])
         else:
             normalized.append(line)
-    return task_name, "\n".join(normalized).strip()
+    description = "\n".join(normalized).strip()
+    if config["kind"] == "非开发任务":
+        description = re.sub(
+            r"(?m)^评估标准（基线工时）[ \t]*[：:].*$",
+            "评估标准（基线工时）：待确认",
+            description,
+        )
+    return task_name, description
 
 
 def load_model_config():
@@ -209,34 +266,57 @@ def call_llm(system, user):
 def build_task(grouped, day):
     if not any(grouped.values()):
         return None
-    template, example = load_template()
+    template, example, template_filename = load_template()
+    config = TASK_TEMPLATES[template_filename]
     sides = [side for side in ("前端", "后端") if grouped[side]]
     scope = "全栈" if len(sides) == 2 else sides[0]
     system = (
-        "你是研发任务编辑。根据 git 提交整理一条父任务。"
+        f"你是研发任务编辑。根据 git 提交整理一条{config['kind']}。"
         "只依据提交里真实做过的事来写，不要编造未出现的功能。"
         "用完整、通顺的中文，不要照抄提交说明和文件路径。"
-        "只输出模板正文，不要 Markdown，不要输出填写示例。"
+        "只输出任务名称和模板正文，不要 Markdown，不要输出填写示例。"
     )
+    instructions = (
+        "栏目标题保持不变，把【】里的提示换成具体内容，不要保留提示原话。\n"
+        f"第一行必须是「【{config['title']}】：具体名称」，名称在 30 个字以内，不要放进方括号。\n"
+    )
+    if template_filename == "开发任务填报-父任务模版.md":
+        instructions += (
+            "子任务拆解按实际改动写，每条以「前端」「后端」或「全栈」开头；没有改动的端不要写。\n"
+            "关键改动点和方案要点里，提交里看不出来的项直接省略，不要写「无」。\n"
+        )
+    elif template_filename == "开发任务填报-子任务模版.md":
+        instructions += (
+            "涉及端按实际改动填写，按模块或分类组织具体工作。\n"
+            "前端、后端分别写实际改动；只有存在外部系统对接时才写联调。\n"
+            "提交里看不出来的模块和不做范围直接省略。\n"
+        )
+    else:
+        instructions += (
+            "只整理提交中真实体现的分析、数据处理、配置、部署、排查或支持工作，"
+            "不要把功能开发改写成非开发工作。\n"
+            "任务名称后逐行输出七个字段：工作类别、工作场景、工作内容及边界、交付内容、"
+            "交付方式、交付要求、评估标准（基线工时）。\n"
+            "交付方式只能选「任务描述中写明即可」「需要额外附件」「两者结合」。"
+            "Git 提交没有可靠工时依据，基线工时统一写「待确认」，不要编造数值。\n"
+        )
     user = (
         f"日期：{day.isoformat()}\n"
         f"当天改动端：{scope}\n"
         f"提交记录：\n{format_commits(grouped)}\n\n"
-        "请按最新模板写一条父任务。栏目标题保持不变，把【】里的提示换成具体内容，不要保留提示原话。\n"
-        "【父任务名称】这一行必须原样保留栏目标题，名称写在冒号后面，30 个字以内。不要把名称放进方括号。\n"
-        "子任务拆解按实际改动写，每条以「前端」「后端」或「全栈」开头；没有改动的端不要写。\n"
-        "关键改动点和方案要点里，提交里看不出来的项直接省略，不要写「无」。\n"
-        "不要输出「填写示例」以及示例里的能耗管理内容。\n\n"
+        f"请按最新模板写一条{config['kind']}。\n{instructions}"
+        "不要输出「填写示例」以及示例里的内容。\n\n"
         f"模板：\n{template}\n\n"
         f"写法参考（不要照抄，不要出现在输出里）：\n{example}"
     )
     try:
-        task_name, description = parse_task_text(call_llm(system, user))
+        task_name, description = parse_task_text(call_llm(system, user), template_filename)
     except RuntimeError:
+        required_fields = "、".join(config["required_fields"])
         task_name, description = parse_task_text(call_llm(
             system,
-            user + "\n\n请重新输出。第一行必须是「【父任务名称】：具体名称」，并保留「1. 需求背景」和「2. 技术性描述」。",
-        ))
+            user + f"\n\n请重新输出。第一行必须是「【{config['title']}】：具体名称」，并保留字段：{required_fields}。",
+        ), template_filename)
     if scope not in POSITION_BY_SCOPE:
         sides = [side for side in ("前端", "后端") if grouped[side]]
         scope = "全栈" if len(sides) == 2 else sides[0]
@@ -578,7 +658,7 @@ def find_task_record(driver, task_name):
     )
 
 
-def schedule_task(driver, task_name):
+def schedule_task(driver, task_name, day):
     driver.get(TASK_SCHEDULING_URL)
     WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".ant-table")))
     wait_project(driver)
@@ -590,7 +670,6 @@ def schedule_task(driver, task_name):
     if str(record.get("schedulingStatus")) == "1":
         log.info("任务已排产，跳过：%s", task_name)
         return record
-    day = datetime.now().date()
     start = f"{day.isoformat()} 08:30:00"
     end = f"{(day + timedelta(days=4)).isoformat()} 17:30:00"
     scheduled = driver.execute_async_script(
@@ -715,7 +794,7 @@ def schedule_task(driver, task_name):
     return record
 
 
-def report_created_task(driver, task_name, work_description, commit_id, grouped):
+def report_created_task(driver, task_name, work_description, commit_id, grouped, day):
     driver.get(TASK_EXECUTE_URL)
     WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".ant-table")))
     driver.execute_script(
@@ -773,7 +852,7 @@ def report_created_task(driver, task_name, work_description, commit_id, grouped)
     )
     if not task:
         raise RuntimeError(f"任务执行里没有找到已排产任务：{task_name}")
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = day.isoformat()
     reported = driver.execute_async_script(
         """
         const taskId = arguments[0];
@@ -799,7 +878,7 @@ def report_created_task(driver, task_name, work_description, commit_id, grouped)
     if not commit_id:
         raise RuntimeError("当天没有提交记录，无法填写提交ID")
     target = {"id": task["id"], "name": task.get("taskName") or task_name}
-    screenshot = render_commit_screenshot(driver, grouped, datetime.strptime(today, "%Y-%m-%d").date())
+    screenshot = render_commit_screenshot(driver, grouped, day)
     click_work_hour(driver, target["id"])
     WebDriverWait(driver, 20).until(lambda d: _modal_ready(d))
     start = f"{today} 08:30:00"
@@ -984,8 +1063,15 @@ def _task_row_ready(driver, task_name):
     )
 
 
+def is_supported_task_description(description):
+    return any(
+        all(field in description for field in config["required_fields"])
+        for config in TASK_TEMPLATES.values()
+    )
+
+
 def find_today_task(driver, day):
-    """当天已经由本脚本创建过的父任务。按创建人和模板正文识别，不看任务名称。"""
+    """当天已经由本脚本创建过的父任务。按创建人和受支持模板正文识别，不看任务名称。"""
     driver.get(TASK_LIST_URL)
     WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//button[contains(.,'新增')]")))
     wait_project(driver)
@@ -1046,7 +1132,7 @@ def find_today_task(driver, day):
         if parent not in (None, "", 0, "0"):
             continue
         description = str(item.get("description") or "")
-        if "需求背景" not in description or "技术性描述" not in description:
+        if not is_supported_task_description(description):
             continue
         matched.append(item)
     if not matched:
@@ -1074,7 +1160,7 @@ def task_from_preset(preset, grouped):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--prepare", action="store_true", help="只输出当天提交，不打开浏览器")
+    parser.add_argument("--prepare", action="store_true", help="只输出指定日期的提交，不打开浏览器")
     parser.add_argument("--task-file", help="使用已经写好的任务名称、描述和报工说明")
     args = parser.parse_args(argv)
     day = target_day()
@@ -1125,8 +1211,8 @@ def main(argv=None):
         commit_id = commit_ids(grouped)
         log.info("报工内容：\n%s", description)
         log.info("提交ID：%s", commit_id)
-        schedule_task(driver, task_name)
-        report_created_task(driver, task_name, description, commit_id, grouped)
+        schedule_task(driver, task_name, day)
+        report_created_task(driver, task_name, description, commit_id, grouped, day)
     finally:
         driver.quit()
 
