@@ -64,7 +64,7 @@ TASK_LIST_URL = "https://scic.cdqckj.com:65036/businessFlow/taskManagement/taskL
 TASK_SCHEDULING_URL = "https://scic.cdqckj.com:65036/businessFlow/taskManagement/taskScheduling"
 TASK_EXECUTE_URL = "https://scic.cdqckj.com:65036/businessFlow/taskManagement/taskExecute"
 TASK_CATEGORY = "development"
-WORK_DESCRIPTION_MAX_LENGTH = 60
+DEFAULT_WORK_DESCRIPTION_MAX_LENGTH = 60
 POSITION_BY_SCOPE = {
     "前端": "前端工程师",
     "后端": "Java开发工程师",
@@ -332,16 +332,54 @@ def build_task(grouped, day):
     }
 
 
+def work_description_max_length():
+    configured = (
+        load_env(ENV_PATH).get("WORK_DESCRIPTION_MAX_LENGTH") or ""
+    ).strip()
+    if not configured:
+        return DEFAULT_WORK_DESCRIPTION_MAX_LENGTH
+    try:
+        max_length = int(configured)
+    except ValueError:
+        raise RuntimeError("WORK_DESCRIPTION_MAX_LENGTH 必须是正整数") from None
+    if max_length <= 0:
+        raise RuntimeError("WORK_DESCRIPTION_MAX_LENGTH 必须是正整数")
+    return max_length
+
+
 def limit_work_description(text):
     description = (text or "").strip()
-    if len(description) <= WORK_DESCRIPTION_MAX_LENGTH:
+    max_length = work_description_max_length()
+    if len(description) <= max_length:
         return description
-    description = description[:WORK_DESCRIPTION_MAX_LENGTH].rstrip()
-    return re.sub(r"\n\d+(?:[.、]\s*)?$", "", description).rstrip()
+    lines = [line.strip() for line in description.splitlines() if line.strip()]
+    kept = []
+    for line in lines:
+        candidate = "\n".join(kept + [line])
+        if len(candidate) > max_length:
+            break
+        kept.append(line)
+    if not kept:
+        raise RuntimeError(
+            "报工说明第一条完整内容超过 WORK_DESCRIPTION_MAX_LENGTH，"
+            "请调大字数限制或缩短内容"
+        )
+    return "\n".join(kept)
+
+
+def numbered_description(text):
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if lines and all(re.match(r"^\d+[.、]", line) for line in lines):
+        return "\n".join(lines)
+    return ""
 
 
 def build_work_description(grouped, task_name):
     """把当天全部提交整理成工时说明。同一件事合并，不同的事分行编号。"""
+    max_length = work_description_max_length()
     subjects = []
     seen = set()
     for side in ("前端", "后端"):
@@ -355,21 +393,29 @@ def build_work_description(grouped, task_name):
     system = (
         "你是工时报工编辑。把当天的 git 提交整理成可直接填写的工时说明。"
         "只写提交里真实做过的事，不要编造功能，不要写文件路径和提交哈希。"
-        "同一件事的多次提交合并成一条，不同的事分开写，60 字内优先保留主要改动。"
+        f"同一件事的多次提交合并成一条，不同的事分开写，{max_length} 字内优先保留主要改动。"
         "一条提交里的文件不要再单独写成另一条。条目数量不要超过提交条数。"
         "每条单独一行，从 1 连续编号，格式为「1.具体做了什么」。"
-        "包含编号、标点和换行在内，全部内容不能超过 60 个字符。"
+        "每条必须是语义完整的短句，不得截断词语或句子。"
+        f"包含编号、标点和换行在内，全部内容不能超过 {max_length} 个字符。"
         "不要 Markdown，不要空行，不要额外解释。"
     )
     user = f"任务名称：{task_name}\n提交记录：\n{format_commits(grouped)}"
-    text = ""
     try:
-        text = call_llm(system, user).strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if lines and all(re.match(r"^\d+[.、]", line) for line in lines):
-            return limit_work_description("\n".join(lines))
+        description = numbered_description(call_llm(system, user))
+        if description:
+            if len(description) <= max_length:
+                return description
+            retry_user = (
+                f"{user}\n上次生成的报工说明超过 {max_length} 个字符。"
+                "请压缩改写为语义完整的短句，保留主要改动，不要从句中截断。"
+                f"上次内容：\n{description}"
+            )
+            rewritten = numbered_description(call_llm(system, retry_user))
+            if rewritten:
+                return limit_work_description(rewritten)
+            log.warning("工时说明压缩改写未按编号返回，保留原结果的完整条目")
+            return limit_work_description(description)
         log.warning("工时说明没有按编号返回，改用提交说明")
     except RuntimeError as error:
         log.warning("工时说明生成失败，改用提交说明：%s", error)

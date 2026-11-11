@@ -429,18 +429,36 @@ class WorkflowDateTest(unittest.TestCase):
 
 class WorkDescriptionTest(unittest.TestCase):
     @mock.patch.object(新增任务, "call_llm")
-    def test_llm_description_has_no_dangling_number_after_limit(self, call_llm):
-        first_line = "1." + "一" * 55
-        call_llm.return_value = first_line + "\n2.补充自动化测试"
+    def test_overlong_llm_description_is_rewritten(self, call_llm):
+        original = "1." + "一" * 70
+        rewritten = "1.完成订单统计并补充测试"
+        call_llm.side_effect = [original, rewritten]
         grouped = {"前端": [{"subject": "完成订单统计", "files": []}], "后端": []}
 
-        result = 新增任务.build_work_description(grouped, "订单统计")
+        with mock.patch.object(新增任务, "load_env", return_value={}):
+            result = 新增任务.build_work_description(grouped, "订单统计")
+
+        self.assertEqual(result, rewritten)
+        self.assertEqual(call_llm.call_count, 2)
+        self.assertIn("压缩改写", call_llm.call_args_list[1].args[1])
+
+    @mock.patch.object(新增任务, "call_llm")
+    def test_overlong_rewrite_keeps_complete_entries(self, call_llm):
+        first_line = "1." + "一" * 55
+        original = first_line + "\n2.补充自动化测试"
+        call_llm.side_effect = [original, original]
+        grouped = {"前端": [{"subject": "完成订单统计", "files": []}], "后端": []}
+
+        with mock.patch.object(新增任务, "load_env", return_value={}):
+            result = 新增任务.build_work_description(grouped, "订单统计")
 
         self.assertEqual(result, first_line)
         self.assertLessEqual(len(result), 60)
+        self.assertEqual(call_llm.call_count, 2)
 
-    def test_task_file_description_is_limited_before_reporting(self):
-        description = "1." + "工" * 70
+    def test_task_file_description_keeps_complete_entries_before_reporting(self):
+        first_line = "1." + "工" * 55
+        description = first_line + "\n2.补充自动化测试"
         with mock.patch.multiple(
             新增任务,
             collect_commits=mock.DEFAULT,
@@ -450,18 +468,66 @@ class WorkDescriptionTest(unittest.TestCase):
             commit_ids=mock.DEFAULT,
             schedule_task=mock.DEFAULT,
             report_created_task=mock.DEFAULT,
+            load_env=mock.DEFAULT,
         ) as mocks:
             mocks["collect_commits"].return_value = {"前端": [], "后端": []}
             mocks["find_today_task"].return_value = {"id": "task-1", "taskName": "订单统计"}
             mocks["commit_ids"].return_value = "abc"
+            mocks["load_env"].return_value = {}
             task_file = mock.mock_open(read_data=json.dumps({"workDescription": description}))
             with mock.patch("builtins.open", task_file):
                 新增任务.main(["--task-file", "task.json"])
 
             actual = mocks["report_created_task"].call_args.args[2]
 
-        self.assertEqual(actual, "1." + "工" * 58)
+        self.assertEqual(actual, first_line)
         self.assertLessEqual(len(actual), 60)
+
+    def test_env_length_controls_complete_entry_limit(self):
+        description = "1.完成订单统计\n2.补充接口和页面自动化测试"
+        with mock.patch.object(
+            新增任务,
+            "load_env",
+            return_value={"WORK_DESCRIPTION_MAX_LENGTH": "20"},
+        ):
+            result = 新增任务.limit_work_description(description)
+
+        self.assertEqual(result, "1.完成订单统计")
+
+    def test_single_overlong_entry_is_rejected(self):
+        with mock.patch.object(新增任务, "load_env", return_value={}):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "WORK_DESCRIPTION_MAX_LENGTH",
+            ):
+                新增任务.limit_work_description("1." + "工" * 70)
+
+    @mock.patch.object(新增任务, "call_llm")
+    def test_env_length_is_used_in_llm_prompt(self, call_llm):
+        call_llm.return_value = "1.完成订单统计"
+        grouped = {"前端": [{"subject": "完成订单统计", "files": []}], "后端": []}
+
+        with mock.patch.object(
+            新增任务,
+            "load_env",
+            return_value={"WORK_DESCRIPTION_MAX_LENGTH": "80"},
+        ):
+            新增任务.build_work_description(grouped, "订单统计")
+
+        prompt = call_llm.call_args.args[0]
+        self.assertIn("80 字内", prompt)
+        self.assertIn("80 个字符", prompt)
+        self.assertNotIn("60 字内", prompt)
+
+    def test_invalid_env_length_is_rejected(self):
+        for value in ("abc", "0", "-1", "1.5"):
+            with self.subTest(value=value), mock.patch.object(
+                新增任务,
+                "load_env",
+                return_value={"WORK_DESCRIPTION_MAX_LENGTH": value},
+            ):
+                with self.assertRaisesRegex(RuntimeError, "正整数"):
+                    新增任务.limit_work_description("1.完成订单统计")
 
 
 if __name__ == "__main__":
